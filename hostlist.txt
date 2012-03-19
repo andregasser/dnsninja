@@ -24,3 +24,8 @@ dns2
 dns3
 dns4
 dns5
+pobox
+extranet
+acheron
+mailgw1
+partners

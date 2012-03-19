@@ -63,3 +63,8 @@ typedef struct
 	struct QUESTION *ques;
 } QUERY;
 
+void dns_get_ip_addr(char *buffer, char **ip_addr);
+void change_to_dns_name_format(unsigned char* dns, unsigned char* host);
+void dns_query(char *server, char *host, int query_type, char *buffer);
+unsigned char* read_name(unsigned char *reader, unsigned char *buffer, int *count);
+void dns_print_packet_info(char *buffer);
