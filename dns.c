@@ -33,15 +33,10 @@ void change_to_dns_name_format(unsigned char* dns, unsigned char* host)
 void dns_query(char *server, char *host, int query_type, char *buffer)
 {
 	int i, j, s, stop;
-	//char *qname, *reader;
 	char *qname;
-	//struct sockaddr_in a, dest;
 	struct sockaddr_in dest;
-	//struct RES_RECORD answers[20], auth[20], addit[20];
 	struct DNS_HEADER *dns = NULL;
 	struct QUESTION *qinfo = NULL;
-
-	//printf("Resolving %s", host);
 
 	// Open UDP network socket for DNS packets
 	s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);	
@@ -88,14 +83,19 @@ void dns_query(char *server, char *host, int query_type, char *buffer)
 	}
 }
 
-void dns_get_ip_addr(char *buffer, char **ip_addr)
+
+void dns_get_soa(char *buffer, ...)
+{
+
+}
+
+void dns_get_a(char *buffer, char **ip_addr)
 {
 	int i, j, s, stop;
 	char *qname, *reader;
 	struct sockaddr_in a, dest;
 	struct DNS_HEADER *dns = NULL;
 	struct QUESTION *qinfo = NULL;
-
 	struct RES_RECORD answers[20];
 
 	// Initialize pointers
@@ -135,23 +135,22 @@ void dns_get_ip_addr(char *buffer, char **ip_addr)
 	
 	for (i = 0; i < htons(dns->ans_count); i++)
 	{
-		printf("Name: %s ", answers[i].name);
-		if (ntohs(answers[i].resource->type) == 1) // IPv4 address
+		// Process resource type A (IPv4 address)
+		if (ntohs(answers[i].resource->type) == 1) 
 		{
 			long *p;
 			p = (long *)answers[i].rdata;
 			a.sin_addr.s_addr = (*p);  // working without ntohl
-			printf("has IPv4 address : %s", inet_ntoa(a.sin_addr));
+			ip_addr[i] = malloc(answers[i].resource->data_len);
+			strcpy(ip_addr[i], inet_ntoa(a.sin_addr));
 		}
-		if (ntohs(answers[i].resource->type) == 5) // Canonical name
-		{
-			printf("has alias name : %s", answers[i].rdata);
-		}
-		printf("\n");
+		
+		// Process resource type CNAME (Canonical name)
+		//if (ntohs(answers[i].resource->type) == 5) 
+		//{
+			//printf("has alias name : %s", answers[i].rdata);
+		//}
 	}
-
-
-
 }
 
 

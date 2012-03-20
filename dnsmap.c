@@ -32,7 +32,7 @@
 // Define structs
 typedef struct 
 {
-	char *server1;
+	char *servers[5];
 	char *domain;
 	char *inputfile;
 	int reverse;
@@ -42,6 +42,7 @@ typedef struct
 
 /* Function prototypes */
 int parse_cmd_args(int *argc, char *argv[]);
+int parse_server_cmd_arg(char *optarg, char *servers[]);
 void do_dns_lookups(void);
 void do_forward_dns_lookup(char *server, char *host);
 void do_reverse_dns_lookup(char *server, char *host);
@@ -90,10 +91,16 @@ int main(int argc, char *argv[])
 
 int parse_cmd_args(int *argc, char *argv[])
 {
+	int i;
+	int ret = 0;
+	
 	// Init struct
 	params->reverse = 0;
 	params->help = 0;
-	params->server1 = "";
+	
+	for (i = 0; i < 5; i++)
+		params->servers[i] = '\0';
+	
 	params->domain = "";
 	params->inputfile = "";
 	params->verbose = 0;
@@ -127,7 +134,9 @@ int parse_cmd_args(int *argc, char *argv[])
 				params->reverse = 1;						
 				break;
 			case 's':
-				params->server1 = optarg;
+				// Process server parameters
+				ret = parse_server_cmd_arg(optarg, params->servers);
+				if (ret != 0) { return ret; }
 				break;
 			case 'd':
 				params->domain = optarg;
@@ -148,18 +157,39 @@ int parse_cmd_args(int *argc, char *argv[])
 	if (params->reverse == 0)
 	{
 		// Forward lookups require domain, server and inputfile params
-		if (params->server1 == '\0') { return -1; }
+		if (params->servers == '\0') { return -1; }
 		if (params->domain == '\0') { return -2; }
 		if (params->inputfile == '\0') { return -3; }
 	}
 	else
 	{
 		// Reverse lookups require server and inputfile params
-		if (params->server1 == '\0') { return -4; }
+		if (params->servers == '\0') { return -4; }
 		if (params->inputfile == '\0') { return -5; }
 	}
 		
 	return 0;
+}
+
+int parse_server_cmd_arg(char *optarg, char *servers[])
+{
+	int i = 0;
+	char *ptr;
+	
+	if (optarg != NULL) 
+	{
+		ptr = strtok(optarg, ",");
+		while (ptr != NULL)
+		{
+			// Server speichern
+			servers[i] = malloc(strlen(ptr));
+			strcpy(servers[i], ptr);
+			i++;
+			
+			// Get next token
+			ptr = strtok(NULL, ",");
+		}
+	}
 }
 
 void do_dns_lookups(void)
@@ -168,6 +198,12 @@ void do_dns_lookups(void)
 	FILE *f;
 	char line[255];
 	char host[255];
+	int i;
+	
+	printf("Using DNS servers: ");
+	for (i = 0; i < 5; i++) 
+		printf("%s ", params->servers[i]);
+	printf("\n");
 	
 	/*
 	if (params->reverse)
@@ -195,12 +231,12 @@ void do_dns_lookups(void)
 				strcat(host, line);
 				strcat(host, ".");
 				strcat(host, params->domain);
-				do_forward_dns_lookup(params->server1, host);
+				do_forward_dns_lookup(params->servers[0], host);
 			}
 			else 
 			{
 				// Lookup by IP address and try to get a hostname
-				do_reverse_dns_lookup(params->server1, host);
+				do_reverse_dns_lookup(params->servers[0], host);
 			}
 		}
 		//print_verb("Closing file %s...\n", params->inputfile);
@@ -213,9 +249,13 @@ void do_dns_lookups(void)
 	}
 }
 
+
+
+
 // Perform a forward dns lookup
 void do_forward_dns_lookup(char *server, char *host)
 {
+	int found = 0;
 	int i;
 	char *buffer = malloc(65536);
 	memset(buffer, 0, 65536);
@@ -224,22 +264,23 @@ void do_forward_dns_lookup(char *server, char *host)
 	// Initialize array of ip adresses
 	for (i = 0; i < 20; i++) { ip_addr[i] = '\0'; }
 		
-	printf("%s -->", host);
-
-
-	//print_verb("Doing a forward DNS lookup of %s on server %s\n", host, server);
-	dns_query(server, host, DNS_RES_REC_A, buffer);
- 	
- 	dns_get_ip_addr(buffer, ip_addr); 
+	printf("%-30s  -->  ", host);
 	
+	dns_query(server, host, DNS_RES_REC_A, buffer);
+ 	dns_get_a(buffer, ip_addr); 
+		
 	// List ip addresses
 	for (i = 0; i < 20; i++)
 	{
 		if (ip_addr[i] != '\0')
 		{
-			printf("%s\n", ip_addr[i]);
+			printf("%-30s ", ip_addr[i]);
+			found = 1;
 		}
 	}
+	
+	if (!found) { printf("%-30s", "<n/a>"); }
+	
 	printf("\n");
 	
  	free(buffer);
