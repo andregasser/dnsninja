@@ -15,6 +15,18 @@
 // --verbose, -v                   Generate verbose output.
 // --help, -h                      Display help page
 //
+// Related links:
+// --------------
+//
+// Reverse DNS lookups
+// http://www.xinotes.org/notes/note/1665/  
+//
+// RFC 1034 - Domain Names - Concepts and Facilities
+// http://www.ietf.org/rfc/rfc1035.txt
+//
+// RFC 1035 - Domain Implementation and Specification
+// http://www.ietf.org/rfc/rfc1035.txt
+//
 ///////////////////////////////////////////////////////////////////////////////
 
 #include <stdio.h>
@@ -45,7 +57,7 @@ int parse_cmd_args(int *argc, char *argv[]);
 int parse_server_cmd_arg(char *optarg, char *servers[]);
 void do_dns_lookups(void);
 void do_forward_dns_lookup(char *server, char *host);
-void do_reverse_dns_lookup(char *server, char *host);
+void do_reverse_dns_lookup(char *server, char *ip);
 void chomp(char *s);
 void display_help_page(void);
 
@@ -198,25 +210,15 @@ void do_dns_lookups(void)
 	FILE *f;
 	char line[255];
 	char host[255];
-	int i;
+	int i = 0;
 	
 	printf("Using DNS servers: ");
-	for (i = 0; i < 5; i++) 
+	while (params->servers[i] != '\0')
+	{
 		printf("%s ", params->servers[i]);
-	printf("\n");
-	
-	/*
-	if (params->reverse)
-	{
-		print_verb("Doing reverse DNS lookups against %s...\n", params->server1);
-	} 
-	else
-	{
-		print_verb("Doing forward DNS lookups against %s...\n", params->server1);
+		i++;
 	}
-	
-	print_verb("Opening file %s...\n", params->inputfile);
-	*/
+	printf("\n");
 	
 	f = fopen(params->inputfile, "r");
 	if (f != NULL)
@@ -236,10 +238,11 @@ void do_dns_lookups(void)
 			else 
 			{
 				// Lookup by IP address and try to get a hostname
+				chomp(line);
+				strcat(host, line);
 				do_reverse_dns_lookup(params->servers[0], host);
 			}
 		}
-		//print_verb("Closing file %s...\n", params->inputfile);
 		fclose(f);	
 	}
 	else
@@ -256,41 +259,72 @@ void do_dns_lookups(void)
 void do_forward_dns_lookup(char *server, char *host)
 {
 	int found = 0;
+	int first = 1;
 	int i;
-	char *buffer = malloc(65536);
-	memset(buffer, 0, 65536);
 	char *ip_addr[20];
 	
 	// Initialize array of ip adresses
 	for (i = 0; i < 20; i++) { ip_addr[i] = '\0'; }
 		
-	printf("%-30s  -->  ", host);
+	printf("%-30s  ->  ", host);
 	
-	dns_query(server, host, DNS_RES_REC_A, buffer);
- 	dns_get_a(buffer, ip_addr); 
+	dns_query_a_record(server, host, ip_addr);
 		
 	// List ip addresses
 	for (i = 0; i < 20; i++)
 	{
 		if (ip_addr[i] != '\0')
 		{
-			printf("%-30s ", ip_addr[i]);
+			if (first)
+			{
+				printf("%s\n", ip_addr[i]);
+				first = 0;
+			}
+			else
+			{
+				printf("                                    %s\n", ip_addr[i]);
+			}
 			found = 1;
 		}
 	}
 	
-	if (!found) { printf("%-30s", "<n/a>"); }
-	
-	printf("\n");
-	
- 	free(buffer);
+	if (!found) { printf("%s\n", "n/a"); }
 }
 
 // Perform a reverse dns lookup
-void do_reverse_dns_lookup(char *server, char *host)
+void do_reverse_dns_lookup(char *server, char *ip)
 {
-	printf("Doing a forward DNS lookup of %s\n", host);
-	//dns_query();
+	int found = 0;
+	int first = 1;
+	int i;
+	char *domains[20];
+	
+	// Initialize array of domains
+	for (i = 0; i < 20; i++) { domains[i] = '\0'; }
+		
+	printf("%-30s  ->  ", ip);
+	
+	dns_query_ptr_record(server, ip, domains);
+		
+	// List domains
+	for (i = 0; i < 20; i++)
+	{
+		if (domains[i] != '\0')
+		{
+			if (first)
+			{
+				printf("%s\n", domains[i]);
+				first = 0;
+			}
+			else
+			{
+				printf("                                    %s\n", domains[i]);
+			}
+			found = 1;
+		}
+	}
+	
+	if (!found) { printf("%s\n", "n/a"); }
 }
 
 // Removes newlines \n from the char array
