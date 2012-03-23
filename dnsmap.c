@@ -37,11 +37,14 @@
 #include "dns.h"
 #include "util.h"
 
-/* Define some constants */
-#define APP_NAME        "DNSMAP" // Name of applicaton
-#define APP_VERSION     "0.1"    // Version of application
 
-// Define structs
+
+
+/* Define some constants */
+#define APP_NAME        "DNSMAP" /* Name of applicaton */
+#define APP_VERSION     "0.1"    /* Version of application */
+
+/* Define structs */
 typedef struct 
 {
 	char *servers[5];
@@ -52,6 +55,13 @@ typedef struct
 	int verbose;
 } cmd_params;
 
+/* Define struct for storing workitems as single linked list */
+typedef struct workitem
+{
+	char *wi;
+	struct workitem *next;
+} workitem;
+
 /* Function prototypes */
 int parse_cmd_args(int *argc, char *argv[]);
 int parse_server_cmd_arg(char *optarg, char *servers[]);
@@ -60,24 +70,26 @@ void do_forward_dns_lookup(char *server, char *host);
 void do_reverse_dns_lookup(char *server, char *ip);
 void chomp(char *s);
 void display_help_page(void);
+void load_workitems(char *inputfile, workitem **wi_start, int reverse);
+void dist_workitems(workitem **wi_list, workitem **wi_t1, workitem **wi_t2,
+		workitem **wi_t3, workitem **wi_t4, workitem **wi_t5);
 
-// Global vars
+/* Global vars */
 cmd_params *params;
-
 
 int main(int argc, char *argv[]) 
 {
 	int ret = 0;
-	
-	// Allocate structures on heap
+
+	/* Allocate structures on heap */
 	params = malloc(sizeof(cmd_params));
-		
+
 	printf("\n\n");
 	printf("%s %s by André Gasser (sh0ka)\n", APP_NAME, APP_VERSION);
 	printf("----------------------------------\n");
 	printf("\n");
-		
-	// Parse commandline args
+
+	/* Parse commandline args */
 	ret = parse_cmd_args(&argc, argv);
 	if ((ret == -1) || (ret == -4)) 
 	{
@@ -94,10 +106,10 @@ int main(int argc, char *argv[])
 
 	// Display help page if desired. Otherwise, do DNS lookups
 	params->help ? display_help_page() : do_dns_lookups();
-	
+
 	// Free memory on heap
 	free(params);
-	
+
 	return ret;
 }
 
@@ -105,14 +117,14 @@ int parse_cmd_args(int *argc, char *argv[])
 {
 	int i;
 	int ret = 0;
-	
+
 	// Init struct
 	params->reverse = 0;
 	params->help = 0;
-	
+
 	for (i = 0; i < 5; i++)
 		params->servers[i] = '\0';
-	
+
 	params->domain = "";
 	params->inputfile = "";
 	params->verbose = 0;
@@ -129,7 +141,7 @@ int parse_cmd_args(int *argc, char *argv[])
 			{ "verbose",	no_argument,       0, 'v' },
 			{ 0, 0, 0, 0 }
 		};
-	
+
 		/* getopt_long stores the option index here */
 		int option_index = 0;
 		int c;
@@ -164,7 +176,7 @@ int parse_cmd_args(int *argc, char *argv[])
 				break;
 		}
 	}
-	
+
 	// Check param dependencies
 	if (params->reverse == 0)
 	{
@@ -179,7 +191,7 @@ int parse_cmd_args(int *argc, char *argv[])
 		if (params->servers == '\0') { return -4; }
 		if (params->inputfile == '\0') { return -5; }
 	}
-		
+
 	return 0;
 }
 
@@ -187,7 +199,7 @@ int parse_server_cmd_arg(char *optarg, char *servers[])
 {
 	int i = 0;
 	char *ptr;
-	
+
 	if (optarg != NULL) 
 	{
 		ptr = strtok(optarg, ",");
@@ -197,7 +209,7 @@ int parse_server_cmd_arg(char *optarg, char *servers[])
 			servers[i] = malloc(strlen(ptr));
 			strcpy(servers[i], ptr);
 			i++;
-			
+
 			// Get next token
 			ptr = strtok(NULL, ",");
 		}
@@ -206,12 +218,16 @@ int parse_server_cmd_arg(char *optarg, char *servers[])
 
 void do_dns_lookups(void)
 {
-	/* Open input file */
-	FILE *f;
-	char line[255];
-	char host[255];
 	int i = 0;
-	
+	workitem *wi_start, *wi_t1, *wi_t2, *wi_t3, *wi_t4, *wi_t5;
+
+	wi_start = NULL;
+	wi_t1 = NULL;
+	wi_t2 = NULL;
+	wi_t3 = NULL;
+	wi_t4 = NULL;
+	wi_t5 = NULL;
+
 	printf("Using DNS servers: ");
 	while (params->servers[i] != '\0')
 	{
@@ -219,58 +235,137 @@ void do_dns_lookups(void)
 		i++;
 	}
 	printf("\n");
-	
+
+	/* Load workitems into linked list */
+	load_workitems(params->inputfile, &wi_start, params->reverse);	
+
+	/* Distribute workitems among threads */
+	dist_workitems(&wi_start, &wi_t1, &wi_t2, &wi_t3, &wi_t4, &wi_t5);
+
+	/* Do DNS lookups */
+	/*
+	   if (params->reverse == 0)
+	   {
+	   do_forward_dns_lookups(params->servers[0], host);
+	   }
+	   else
+	   {
+	   do_reverse_dns_lookups(params->servers[0], host);
+	   }
+	 */
+}
+
+/*
+ * Load ip's/hosts in a linked list.
+ */
+void load_workitems(char *inputfile, workitem **wi_start, int reverse)
+{
+	FILE *f;
+	workitem *curr, *head;
+	char host[256];
+	char line[256];
+	int first = 1;
+
+	head = NULL;
+
 	f = fopen(params->inputfile, "r");
 	if (f != NULL)
 	{
 		while (fgets(line, 255, f) != NULL)
 		{
 			memset(host, 0, sizeof(host));
-			if (params->reverse == 0) 
+			chomp(line);
+			if (reverse)
 			{
-				// Lookup by hostname and try to get an IP address
-				chomp(line);
+				strcpy(host, line);
+			}
+			else
+			{
 				strcat(host, line);
 				strcat(host, ".");
 				strcat(host, params->domain);
-				do_forward_dns_lookup(params->servers[0], host);
 			}
-			else 
-			{
-				// Lookup by IP address and try to get a hostname
-				chomp(line);
-				strcat(host, line);
-				do_reverse_dns_lookup(params->servers[0], host);
-			}
+
+			curr = (workitem *)malloc(sizeof(workitem));  /* free memory! */
+			curr->wi = (char *)malloc(sizeof(host));
+			strcpy(curr->wi, host);
+
+
+			curr->next = head;
+			head = curr;
 		}
 		fclose(f);	
+
+		*wi_start = head;
 	}
 	else
 	{
-		printf("Error: File %s could not be opened\n", params->reverse);
+		printf("Error: File %s could not be opened\n", inputfile);
 		exit -1;
 	}
 }
 
 
+/*
+ * Distribute workitems among threads.
+ */
+void dist_workitems(workitem **wi_list, workitem **wi_t1, workitem **wi_t2,
+		workitem **wi_t3, workitem **wi_t4, workitem **wi_t5)
+{
+	workitem *curr;
+	int max_trays = 5;
+	int tray = 0;
+	int count = 0;
 
 
-// Perform a forward dns lookup
+	while (*wi_list)
+	{
+		/* Choose tray */
+		tray = count % max_trays;
+
+		printf("Placing workitem %s in tray %d\n", (*wi_list)->wi, tray);
+
+		//curr = (workitem *)malloc(sizeof(workitem));
+
+		/*
+		   switch (tray)
+		   {
+0:
+		 *wi_t1 = *wi_list;
+		 break;
+1:
+2:
+3:
+4:
+}
+		 */
+
+		*wi_list = (*wi_list)->next;
+
+		count++;
+
+		}
+}
+
+
+/*
+ * Perform a forward DNS lookup
+ */
 void do_forward_dns_lookup(char *server, char *host)
 {
 	int found = 0;
 	int first = 1;
 	int i;
 	char *ip_addr[20];
-	
-	// Initialize array of ip adresses
+
+	/* Initialize array of ip adresses */
 	for (i = 0; i < 20; i++) { ip_addr[i] = '\0'; }
-		
+
 	printf("%-30s  ->  ", host);
-	
+
 	dns_query_a_record(server, host, ip_addr);
-		
-	// List ip addresses
+
+	/* List ip addresses */
 	for (i = 0; i < 20; i++)
 	{
 		if (ip_addr[i] != '\0')
@@ -287,7 +382,7 @@ void do_forward_dns_lookup(char *server, char *host)
 			found = 1;
 		}
 	}
-	
+
 	if (!found) { printf("%s\n", "n/a"); }
 }
 
@@ -298,14 +393,14 @@ void do_reverse_dns_lookup(char *server, char *ip)
 	int first = 1;
 	int i;
 	char *domains[20];
-	
+
 	// Initialize array of domains
 	for (i = 0; i < 20; i++) { domains[i] = '\0'; }
-		
+
 	printf("%-30s  ->  ", ip);
-	
+
 	dns_query_ptr_record(server, ip, domains);
-		
+
 	// List domains
 	for (i = 0; i < 20; i++)
 	{
@@ -323,15 +418,15 @@ void do_reverse_dns_lookup(char *server, char *ip)
 			found = 1;
 		}
 	}
-	
+
 	if (!found) { printf("%s\n", "n/a"); }
 }
 
 // Removes newlines \n from the char array
 void chomp(char *s) {
-    while(*s && *s != '\n' && *s != '\r') s++;
- 
-    *s = 0;
+	while(*s && *s != '\n' && *s != '\r') s++;
+
+	*s = 0;
 }
 
 // Display a helpful page
