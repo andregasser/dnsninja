@@ -1,3 +1,3 @@
 #! /bin/bash
 
-./dnsmap -r -s 193.192.238.98 -i iplist.txt
+./dnsmap -r -s 160.85.104.60,160.85.104.61 -i iplist.txt

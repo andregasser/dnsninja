@@ -1,85 +1,110 @@
-///////////////////////////////////////////////////////////////////////////////
-//
-// DNSMAP Version 0.1
-// Written by sh0ka 2012
-//
-// Command line parameters:
-// --reverse, -r                   Do reverse DNS lookups
-//                                 (if not specified, a forward DNS lookup
-//                                 will be performed)
-// --servers, -s <ip1, ip2, ...>   List of DNS servers to query
-// --domain, -d <domain name>      Domain name to map, e.g. foo.org
-//                                 (Forward mode only)
-// --inputfile, -i <filename>      File containing a host or ip, depending
-//                                 on the mode choosen (forward, reverse).
-// --verbose, -v                   Generate verbose output.
-// --help, -h                      Display help page
-//
-// Related links:
-// --------------
-//
-// Reverse DNS lookups
-// http://www.xinotes.org/notes/note/1665/  
-//
-// RFC 1034 - Domain Names - Concepts and Facilities
-// http://www.ietf.org/rfc/rfc1035.txt
-//
-// RFC 1035 - Domain Implementation and Specification
-// http://www.ietf.org/rfc/rfc1035.txt
-//
-///////////////////////////////////////////////////////////////////////////////
+/******************************************************************************
+ *
+ * DNSMAP Version 0.1
+ * Written by sh0ka 2012
+ *
+ * Command line parameters:
+ * --reverse, -r                   Do reverse DNS lookups
+ *                                 (if not specified, a forward DNS lookup
+ *                                 will be performed)
+ * --servers, -s <ip1, ip2, ...>   List of DNS servers to query
+ * --domain, -d <domain name>      Domain name to map, e.g. foo.org
+ *                                 (Forward mode only)
+ * --inputfile, -i <filename>      File containing a host or ip, depending
+ *                                 on the mode choosen (forward, reverse).
+ * --outputfile, -o <filename>     Results will be written to this file if
+ *                                 specified
+ * --verbose, -v                   Generate verbose output.
+ * --help, -h                      Display help page
+ *
+ * Related links:
+ * --------------
+ *
+ * Reverse DNS lookups
+ * http://www.xinotes.org/notes/note/1665/  
+ *
+ * RFC 1034 - Domain Names - Concepts and Facilities
+ * http://www.ietf.org/rfc/rfc1035.txt
+ *
+ * RFC 1035 - Domain Implementation and Specification
+ * http://www.ietf.org/rfc/rfc1035.txt
+ *
+ ******************************************************************************/
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <pthread.h>
 #include "dns.h"
-#include "util.h"
-
-
-
+#include "log.h"
 
 /* Define some constants */
 #define APP_NAME        "DNSMAP" /* Name of applicaton */
 #define APP_VERSION     "0.1"    /* Version of application */
 
-/* Define structs */
+/* Used to store command-line args */
 typedef struct 
 {
 	char *servers[5];
 	char *domain;
 	char *inputfile;
+	char *outputfile;
 	int reverse;
 	int help;
 	int verbose;
 } cmd_params;
 
-/* Define struct for storing workitems as single linked list */
+/* Used for storing workitems inside single linked list */
 typedef struct workitem
 {
 	char *wi;
 	struct workitem *next;
 } workitem;
 
+/* Used for storing DNS lookup results inside single linked list */
+typedef struct result
+{
+	char *ip;
+	char *host;
+	struct result *next;
+} result;
+
+/* Used to pass arguments to threads */
+typedef struct
+{
+	int thread_id;
+	struct workitem *wi_list;
+	int reverse;
+	struct result *result_list;
+} thread_params;
+
+
 /* Function prototypes */
 int parse_cmd_args(int *argc, char *argv[]);
 int parse_server_cmd_arg(char *optarg, char *servers[]);
-void do_dns_lookups(void);
-void do_forward_dns_lookup(char *server, char *host);
-void do_reverse_dns_lookup(char *server, char *ip);
+int do_dns_lookups(void);
+void do_forward_dns_lookup(char *server, char *host, result *result_list);
+void do_reverse_dns_lookup(char *server, char *ip, result **result_list);
 void chomp(char *s);
 void display_help_page(void);
 void load_workitems(char *inputfile, workitem **wi_start, int reverse);
 void dist_workitems(workitem **wi_list, workitem **wi_t1, workitem **wi_t2,
 		workitem **wi_t3, workitem **wi_t4, workitem **wi_t5);
+int count_workitems(workitem *wi_list);
+void *proc_workitems(void *arg);
+void write_results(result *results);
+
 
 /* Global vars */
 cmd_params *params;
+pthread_t t1, t2, t3, t4, t5;
 
 int main(int argc, char *argv[]) 
 {
 	int ret = 0;
+
 
 	/* Allocate structures on heap */
 	params = malloc(sizeof(cmd_params));
@@ -93,19 +118,33 @@ int main(int argc, char *argv[])
 	ret = parse_cmd_args(&argc, argv);
 	if ((ret == -1) || (ret == -4)) 
 	{
-		printf("Error: Server must be specified (use option -s)\n"); 	
+		logline(LOG_ERROR, "Error: Server must be specified (use option -s)"); 	
 	}
 	else if (ret == -2)
 	{
-		printf("Error: Domain must be specified (use option -d)\n");
+		logline(LOG_ERROR, "Error: Domain must be specified (use option -d)");
 	}
 	else if ((ret == -3) || (ret == -5))
 	{
-		printf("Error: File must be specified (use option -l)\n");
+		logline(LOG_ERROR, "Error: File must be specified (use option -l)");
 	}
 
+	/* Set verbosity level */
+	params->verbose == 1 ? set_loglevel(LOG_DEBUG) : set_loglevel(LOG_INFO);
+	
 	// Display help page if desired. Otherwise, do DNS lookups
-	params->help ? display_help_page() : do_dns_lookups();
+	if (params->help)
+	{
+		display_help_page();
+	}
+	else
+	{
+		ret = do_dns_lookups();
+		if (ret < 0)
+		{
+			logline(LOG_ERROR, "Error: Could not perform DNS lookups. Errorcode: %s", ret);
+		}
+	}
 
 	// Free memory on heap
 	free(params);
@@ -113,6 +152,9 @@ int main(int argc, char *argv[])
 	return ret;
 }
 
+/*
+ * Parse command line arguments and store them in a global struct.
+ */
 int parse_cmd_args(int *argc, char *argv[])
 {
 	int i;
@@ -127,6 +169,7 @@ int parse_cmd_args(int *argc, char *argv[])
 
 	params->domain = "";
 	params->inputfile = "";
+	params->outputfile = "";
 	params->verbose = 0;
 
 	while (1)
@@ -137,6 +180,7 @@ int parse_cmd_args(int *argc, char *argv[])
 			{ "servers",	required_argument, 0, 's' },
 			{ "domain",		required_argument, 0, 'd' },
 			{ "inputfile",	required_argument, 0, 'i' },
+			{ "outputfile", required_argument, 0, 'o' },
 			{ "help",		no_argument,       0, 'h' },
 			{ "verbose",	no_argument,       0, 'v' },
 			{ 0, 0, 0, 0 }
@@ -146,7 +190,7 @@ int parse_cmd_args(int *argc, char *argv[])
 		int option_index = 0;
 		int c;
 
-		c = getopt_long(*argc, argv, "rs:d:i:hv", long_options, &option_index);
+		c = getopt_long(*argc, argv, "rs:d:i:o:hv", long_options, &option_index);
 
 		/* Detect the end of the options */
 		if (c == -1)
@@ -167,6 +211,9 @@ int parse_cmd_args(int *argc, char *argv[])
 				break;
 			case 'i':
 				params->inputfile = optarg;
+				break;
+			case 'o':
+				params->outputfile = optarg;
 				break;
 			case 'h':
 				params->help = 1;
@@ -195,6 +242,9 @@ int parse_cmd_args(int *argc, char *argv[])
 	return 0;
 }
 
+/* 
+ * Parse server option (-s).
+ */
 int parse_server_cmd_arg(char *optarg, char *servers[])
 {
 	int i = 0;
@@ -216,10 +266,17 @@ int parse_server_cmd_arg(char *optarg, char *servers[])
 	}
 }
 
-void do_dns_lookups(void)
+/*
+ * Main function for doing DNS lookups.
+ */
+int do_dns_lookups(void)
 {
 	int i = 0;
+	thread_params t1_params, t2_params;
+	void *t1_status, *t2_status;
+	//result *t1_result, *t2_result;
 	workitem *wi_start, *wi_t1, *wi_t2, *wi_t3, *wi_t4, *wi_t5;
+
 
 	wi_start = NULL;
 	wi_t1 = NULL;
@@ -228,32 +285,148 @@ void do_dns_lookups(void)
 	wi_t4 = NULL;
 	wi_t5 = NULL;
 
-	printf("Using DNS servers: ");
+	/* Display some info */
+	logline(LOG_INFO, "Using DNS servers:");
 	while (params->servers[i] != '\0')
 	{
-		printf("%s ", params->servers[i]);
+		logline(LOG_INFO, "    %s", params->servers[i]);
 		i++;
 	}
-	printf("\n");
-
+	if (params->domain)
+	{
+		logline(LOG_DEBUG, "Using domain: %s", params->domain);
+	}
+	if (params->inputfile)
+	{
+		logline(LOG_DEBUG, "Using input file: %s", params->inputfile);
+	}
+	if (params->outputfile)
+	{
+		logline(LOG_DEBUG, "Using output file: %s", params->outputfile);
+	}
+	if (params->reverse)
+	{
+		logline(LOG_DEBUG, "DNS lookup mode: Reverse");
+	}
+	else
+	{
+		logline(LOG_DEBUG, "DNS lookup mode: Forward");
+	}
+	if (params->verbose)
+	{
+		logline(LOG_DEBUG, "Verbose mode: On");
+	}
+	else
+	{
+		logline(LOG_DEBUG, "Verbose mode: Off");
+	}
+	
 	/* Load workitems into linked list */
+	logline(LOG_DEBUG, "Loading workitems...");
 	load_workitems(params->inputfile, &wi_start, params->reverse);	
+	logline(LOG_DEBUG, "%d workitems loaded from file", count_workitems(wi_start));
 
 	/* Distribute workitems among threads */
+	logline(LOG_DEBUG, "Distributing workitems among threads...");
 	dist_workitems(&wi_start, &wi_t1, &wi_t2, &wi_t3, &wi_t4, &wi_t5);
+	logline(LOG_DEBUG, "Workitems distributed");
+	logline(LOG_DEBUG, "Thread 1 workitems: %d", count_workitems(wi_t1));
+	logline(LOG_DEBUG, "Thread 2 workitems: %d", count_workitems(wi_t2));
+	logline(LOG_DEBUG, "Thread 3 workitems: %d", count_workitems(wi_t3));
+	logline(LOG_DEBUG, "Thread 4 workitems: %d", count_workitems(wi_t4));
+	logline(LOG_DEBUG, "Thread 5 workitems: %d", count_workitems(wi_t5));
 
-	/* Do DNS lookups */
-	/*
-	   if (params->reverse == 0)
-	   {
-	   do_forward_dns_lookups(params->servers[0], host);
-	   }
-	   else
-	   {
-	   do_reverse_dns_lookups(params->servers[0], host);
-	   }
-	 */
+	/* Start pthreads */
+	t1_params.thread_id = 1;
+	t1_params.wi_list = wi_t1;
+	t1_params.reverse = params->reverse;
+	t1_params.result_list = NULL;
+	t2_params.thread_id = 2;
+	t2_params.wi_list = wi_t2;
+	t2_params.reverse = params->reverse;
+	t2_params.result_list = NULL;
+	
+	if (pthread_create(&t1,	NULL, proc_workitems, &t1_params))
+	{
+		logline(LOG_ERROR, "Could not create thread 1");
+		return -1;
+	}
+	else
+	{
+		logline(LOG_DEBUG, "Thread 1 created");
+	}
+/*	
+	if (pthread_create(&t2,	NULL, proc_workitems, &t2_params))
+	{
+logline(LOG_ERROR, "Could not create thread 2");
+		return -1;
+	}
+	else
+	{
+		logline(LOG_DEBUG, "Thread 2 created");
+	}
+*/	
+
+	/* Wait for threads to finish */
+	pthread_join(t1, &t1_status);
+//	pthread_join(t2, &t2_status);
+
+	/* Extract results out of threads */
+	if ((int *)t1_status < 0)
+	{
+		logline(LOG_ERROR, "Thread 1 had an error condition");
+	}
+	else
+	{
+		/* Extract results from thread 1 */
+		logline(LOG_DEBUG, "Thread 1 finished successfully");
+	}
+	
+	if ((int *)t2_status < 0)
+	{
+		logline(LOG_ERROR, "Thread 2 had an error condition");
+	}
+	else
+	{
+		/* Extract results from thread 2 */
+		logline(LOG_DEBUG, "Thread 2 finished successfully");
+	}
+	
+
+
+	/* ... */
+
+	/* TODO: Consolidate results */
+
+	/* TODO: Export results to text file */
+	write_results(t1_params.result_list);
 }
+
+
+/*
+ * Writes results to a file.
+ */
+void write_results(result *results)
+{
+	FILE *f;
+
+	f = fopen(params->outputfile, "w");
+	if (f != NULL)
+	{
+		fprintf(f, "Host,IP\n");
+
+		while (results)
+		{
+			fprintf(f, "%s,%s\n", results->host, results->ip);
+			results = results->next;
+		}
+
+		fclose(f);
+	}
+}
+
+
+
 
 /*
  * Load ip's/hosts in a linked list.
@@ -290,7 +463,6 @@ void load_workitems(char *inputfile, workitem **wi_start, int reverse)
 			curr->wi = (char *)malloc(sizeof(host));
 			strcpy(curr->wi, host);
 
-
 			curr->next = head;
 			head = curr;
 		}
@@ -312,117 +484,284 @@ void load_workitems(char *inputfile, workitem **wi_start, int reverse)
 void dist_workitems(workitem **wi_list, workitem **wi_t1, workitem **wi_t2,
 		workitem **wi_t3, workitem **wi_t4, workitem **wi_t5)
 {
-	workitem *curr;
-	int max_trays = 5;
-	int tray = 0;
+	workitem *wi_t1_start, *wi_t2_start, *wi_t3_start, *wi_t4_start, *wi_t5_start;
+	int t1_first = 1, t2_first = 1, t3_first = 1, t4_first = 1, t5_first = 1;
+	int max_trays = 5, tray = 0;
 	int count = 0;
 
+	wi_t1_start = NULL;
+	wi_t2_start = NULL;
+	wi_t3_start = NULL;
+	wi_t4_start = NULL;
+	wi_t5_start = NULL;
 
 	while (*wi_list)
 	{
 		/* Choose tray */
 		tray = count % max_trays;
 
-		printf("Placing workitem %s in tray %d\n", (*wi_list)->wi, tray);
+		logline(LOG_DEBUG, "Assigning work item %s to thread %d", (*wi_list)->wi, tray);
 
-		//curr = (workitem *)malloc(sizeof(workitem));
+		switch (tray)
+		{
+			case 0:
+				if (t1_first)
+				{
+					*wi_t1 = *wi_list;
+					wi_t1_start = *wi_t1;
+					t1_first = 0;
+				}
+				else
+				{
+					(*wi_t1)->next = *wi_list;
+					*wi_t1 = *wi_list;
+				}
+				break;
+			case 1:
+				if (t2_first)
+				{
+					*wi_t2 = *wi_list;
+					wi_t2_start = *wi_t2;
+					t2_first = 0;
+				}
+				else
+				{
+					(*wi_t2)->next = *wi_list;
+					*wi_t2 = *wi_list;
+				}
+				break;
 
-		/*
-		   switch (tray)
-		   {
-0:
-		 *wi_t1 = *wi_list;
-		 break;
-1:
-2:
-3:
-4:
-}
-		 */
+			case 2:
+				if (t3_first)
+				{
+					*wi_t3 = *wi_list;
+					wi_t3_start = *wi_t3;
+					t3_first = 0;
+				}
+				else
+				{
+					(*wi_t3)->next = *wi_list;
+					*wi_t3 = *wi_list;
+				}
+				break;
 
-		*wi_list = (*wi_list)->next;
+			case 3:
+				if (t4_first)
+				{
+					*wi_t4 = *wi_list;
+					wi_t4_start = *wi_t4;
+					t4_first = 0;
+				}
+				else
+				{
+					(*wi_t4)->next = *wi_list;
+					*wi_t4 = *wi_list;
+				}
+				break;
 
-		count++;
-
+			case 4:
+				if (t5_first)
+				{
+					*wi_t5 = *wi_list;
+					wi_t5_start = *wi_t5;
+					t5_first = 0;
+				}
+				else
+				{
+					(*wi_t5)->next = *wi_list;
+					*wi_t5 = *wi_list;
+				}
+				break;
 		}
+
+		/* Load next item in list */
+		*wi_list = (*wi_list)->next;
+		count++;
+	}
+
+	/* Terminate linked lists */
+	(*wi_t1)->next = NULL;
+	(*wi_t2)->next = NULL;
+	(*wi_t3)->next = NULL;
+	(*wi_t4)->next = NULL;
+	(*wi_t5)->next = NULL;
+
+	/* Return pointers to start of lists */
+	*wi_t1 = wi_t1_start;
+	*wi_t2 = wi_t2_start;
+	*wi_t3 = wi_t3_start;
+	*wi_t4 = wi_t4_start;
+	*wi_t5 = wi_t5_start;
+}
+
+
+/*
+ * Counts workitems in list.
+ */
+int count_workitems(workitem *wi_list)
+{
+	int count = 0;
+
+	while (wi_list)
+	{
+		count++;
+		wi_list = wi_list->next;
+	}
+
+	return count;
+}
+
+
+
+/*
+ * Process a list of workitems.
+ */
+void *proc_workitems(void *arg)
+{
+	workitem *wi_list;
+
+	/* Cast input param to thread_params struct */
+	thread_params* t_params = (thread_params *)arg;
+	
+	wi_list = t_params->wi_list;
+
+	logline(LOG_DEBUG, "Thread %d: Input params: reverse = %d", t_params->thread_id, t_params->reverse);   
+
+	while (wi_list)
+	{
+		logline(LOG_DEBUG, "Thread %d: Processing workitem %s", t_params->thread_id, wi_list->wi);
+		if (t_params->reverse)
+		{
+			do_reverse_dns_lookup(params->servers[0], wi_list->wi, &(t_params->result_list));
+		}
+		else
+		{
+			do_forward_dns_lookup(params->servers[0], wi_list->wi, t_params->result_list);
+		}
+				
+		wi_list = wi_list->next;
+	}
+
+	/* Temporary print list output */
+	while (t_params->result_list)
+	{
+		printf("Result: Host: %s IP: %s\n", t_params->result_list->host, t_params->result_list->ip);
+		t_params->result_list = t_params->result_list->next;
+	}
 }
 
 
 /*
  * Perform a forward DNS lookup
  */
-void do_forward_dns_lookup(char *server, char *host)
+void do_forward_dns_lookup(char *server, char *host, result *result_list)
 {
+	result *result_list_entry = NULL;
+	result *result_list_start = NULL;
 	int found = 0;
 	int first = 1;
 	int i;
 	char *ip_addr[20];
 
+	/* Save start point of linked list */
+	result_list_start = result_list;
+
 	/* Initialize array of ip adresses */
 	for (i = 0; i < 20; i++) { ip_addr[i] = '\0'; }
 
-	printf("%-30s  ->  ", host);
-
 	dns_query_a_record(server, host, ip_addr);
+
+	/* Go to last entry in result_list */
+	while (result_list)
+	{
+		result_list = result_list->next;
+	}
 
 	/* List ip addresses */
 	for (i = 0; i < 20; i++)
 	{
 		if (ip_addr[i] != '\0')
 		{
-			if (first)
-			{
-				printf("%s\n", ip_addr[i]);
-				first = 0;
-			}
-			else
-			{
-				printf("                                    %s\n", ip_addr[i]);
-			}
-			found = 1;
+			/* Add new entry to list */
+			result_list_entry = (result *)malloc(sizeof(result));
+			result_list_entry->host = host;
+			result_list_entry->ip = ip_addr[i];
+			result_list->next = result_list_entry;
 		}
 	}
-
-	if (!found) { printf("%s\n", "n/a"); }
+	/* Set correct pointer to start of linked list */
+	result_list = result_list_start;
 }
 
 // Perform a reverse dns lookup
-void do_reverse_dns_lookup(char *server, char *ip)
+void do_reverse_dns_lookup(char *server, char *ip, result **result_list)
 {
-	int found = 0;
-	int first = 1;
-	int i;
+	result *list_orig_startaddr = *result_list;
+	result *list_head = NULL;
+	result *list_entry = NULL;
+	result *list_start = NULL;
+	int i = 0;
 	char *domains[20];
 
-	// Initialize array of domains
+	/* Initialize array of domains */
 	for (i = 0; i < 20; i++) { domains[i] = '\0'; }
-
-	printf("%-30s  ->  ", ip);
 
 	dns_query_ptr_record(server, ip, domains);
 
-	// List domains
+	/* Add found domains to a local linked list */
 	for (i = 0; i < 20; i++)
 	{
-		if (domains[i] != '\0')
+		/* exit loop as soon as an empty entry appears */
+		if (domains[i] == NULL) { break; }
+			
+		/* Add new entry to list */	
+		list_entry = (result *)malloc(sizeof(result));
+		list_entry->host = (char *)malloc(strlen(domains[i]));
+		list_entry->ip = (char *)malloc(strlen(ip));
+		strcpy(list_entry->host, domains[i]);
+		strcpy(list_entry->ip, ip);
+		list_entry->next = NULL;
+		if (list_head == NULL)
 		{
-			if (first)
-			{
-				printf("%s\n", domains[i]);
-				first = 0;
-			}
-			else
-			{
-				printf("                                    %s\n", domains[i]);
-			}
-			found = 1;
+			list_head = list_entry;
+			list_start = list_head;
+		}
+		else
+		{			
+			list_head->next = list_entry;
+			list_head = list_head->next;
 		}
 	}
 
-	if (!found) { printf("%s\n", "n/a"); }
+	/* Attach local linked list to existing list of results */
+	if (*result_list == NULL)
+	{
+		/* This is the first entry in the list, therefore it is ok
+		 * that this remains the start address of the list
+		 */
+		*result_list = list_start;
+	} 
+	else
+	{
+		/* Iterate through end of list and attach */
+		while ((*result_list)->next)
+		{
+			*result_list = (*result_list)->next;
+		}
+		
+		/* Attach newly generated linked list to the end of 
+		 * master linked list 
+		 */
+		(*result_list)->next = list_start;
+
+		/* Restore beginning of list pointer */
+		*result_list = list_orig_startaddr;
+	}
 }
 
-// Removes newlines \n from the char array
+/*
+ * Removes newlines \n from the char array.
+ */
 void chomp(char *s) {
 	while(*s && *s != '\n' && *s != '\r') s++;
 

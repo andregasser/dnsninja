@@ -1,3 +1,6 @@
+#ifndef DNS_H
+#define DNS_H
+
 // Define DNS query types
 #define DNS_RES_REC_A     1   // A record
 #define DNS_RES_REC_NS    2   // NS record
@@ -70,3 +73,5 @@ void dns_query_ptr_record(char *server, char *ip, char *domains[]);
 void prep_inaddr_arpa(char *dest, char *src);
 unsigned char* read_name(unsigned char *reader, unsigned char *buffer, int *count);
 //void dns_print_packet_info(char *buffer);
+
+#endif /* DNS_H */

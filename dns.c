@@ -256,6 +256,7 @@ void dns_query_ptr_record(char *server, char *ip, char *domains[])
 
 void prep_inaddr_arpa(char *dest, char *src)
 {
+	char *copystr;
 	char *tmp;
 	char arpa_addr[256];
 	char *token[4];
@@ -266,7 +267,12 @@ void prep_inaddr_arpa(char *dest, char *src)
 	
 	if (src != NULL) 
 	{
-		ptr = strtok(src, ".");
+		/* strtok manipulats the source string. We therefore
+		 * have to make a copy first
+		 */
+		copystr = (char *)malloc(strlen(src));
+		strcpy(copystr, src);
+		ptr = strtok(copystr, ".");
 		while (ptr != NULL)
 		{
 			// Save token
@@ -298,6 +304,9 @@ void prep_inaddr_arpa(char *dest, char *src)
 		strcat(arpa_addr, "in-addr.arpa");
 
 		strcpy(dest, arpa_addr);
+
+		/* Free allocated heap memory */
+		free(copystr);
 	}
 }
 

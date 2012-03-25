@@ -74,7 +74,8 @@ the current version of DNSMAP offers the following features:
   + Do reverse DNS lookups based on a list of ip addresses
   + Query up to five DNS servers in parallel to distribute the load
   + Save the results to a text file
-
+  + Supports different verbosity levels for output
+  
 
 ----[ 2.3 - Usage ]-----------------------------------------------------
 
