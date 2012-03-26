@@ -1,6 +1,6 @@
                                ==DNSMAP==
 
-                        Version 0.1 / 21.03.2012
+                        Version 0.1 / 26.03.2012
 
 --=[ Disclaimer ]=-----------------------------------------------------//
 
@@ -138,7 +138,20 @@ blabla...
 
 ----[ 2.5 - License ]---------------------------------------------------
 
+Copyright 2012 André Gasser
 
+Dnsmap is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+Dnsmap is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Dnsmap.  If not, see <http://www.gnu.org/licenses/>.
 
 
 ----[ 3 - Bibliography ]------------------------------------------------
@@ -155,7 +168,7 @@ blabla...
 ----[ 4 - Contact ]-----------------------------------------------------
 
 Mail:      andre.gasser@gmx.ch
-
+Jabber:    sh0ka@jabber.ccc.de
 
 
 
@@ -164,3 +177,42 @@ Mail:      andre.gasser@gmx.ch
     
     
     
+    
+    
+    
+/******************************************************************************
+ *
+ * DNSMAP Version 0.1
+ * Written by sh0ka 2012
+ *
+ * Command line parameters:
+ * --reverse, -r                   Do reverse DNS lookups
+ *                                 (if not specified, a forward DNS lookup
+ *                                 will be performed)
+ * --servers, -s <ip1, ip2, ...>   List of DNS servers to query
+ * --domain, -d <domain name>      Domain name to map, e.g. foo.org
+ *                                 (Forward mode only)
+ * --inputfile, -i <filename>      File containing a host or ip, depending
+ *                                 on the mode choosen (forward, reverse).
+ * --outputfile, -o <filename>     Results will be written to this file if
+ *                                 specified
+ * --verbosity, -v <level>         Specify verbosity level
+ 1 = Errors only
+ 2 = Informational output
+ 3 = Debug Output
+ * --help, -h                      Display help page
+ *
+ * Related links:
+ * --------------
+ *
+ * Reverse DNS lookups
+ * http://www.xinotes.org/notes/note/1665/  
+ *
+ * RFC 1034 - Domain Names - Concepts and Facilities
+ * http://www.ietf.org/rfc/rfc1035.txt
+ *
+ * RFC 1035 - Domain Implementation and Specification
+ * http://www.ietf.org/rfc/rfc1035.txt
+ *
+ ******************************************************************************/
+

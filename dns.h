@@ -1,7 +1,26 @@
+/******************************************************************************
+ *    Copyright 2012 André Gasser
+ *
+ *    This file is part of Dnsmap.
+ *
+ *    Dnsmap is free software: you can redistribute it and/or modify
+ *    it under the terms of the GNU General Public License as published by
+ *    the Free Software Foundation, either version 3 of the License, or
+ *    (at your option) any later version.
+ *
+ *    Dnsmap is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU General Public License for more details.
+ *
+ *    You should have received a copy of the GNU General Public License
+ *    along with Dnsmap.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
+
 #ifndef DNS_H
 #define DNS_H
 
-// Define DNS query types
+/* Define DNS query types */
 #define DNS_RES_REC_A     1   // A record
 #define DNS_RES_REC_NS    2   // NS record
 #define DNS_RES_REC_CNAME 5   // CNAME record
@@ -10,7 +29,7 @@
 #define DNS_RES_REC_MX    15  // MX record
 
 
-//DNS header structure
+/* DNS header structure */
 struct DNS_HEADER
 {
 	unsigned short id;        // identification number
@@ -33,14 +52,14 @@ struct DNS_HEADER
 	unsigned short add_count;   // number of resource entries
 };
 
-//Constant sized fields of query structure
+/* Constant sized fields of query structure */
 struct QUESTION
 {
 	unsigned short qtype;
 	unsigned short qclass;
 };
 
-//Constant sized fields of the resource record structure
+/* Constant sized fields of the resource record structure */
 #pragma pack(push, 1)
 struct R_DATA
 {
@@ -51,7 +70,7 @@ struct R_DATA
 };
 #pragma pack(pop)
 
-//Pointers to resource record contents
+/* Pointers to resource record contents */
 struct RES_RECORD
 {
 	unsigned char *name;
@@ -59,19 +78,17 @@ struct RES_RECORD
 	unsigned char *rdata;
 };
 
-//Structure of a Query
+/* Structure of a query */
 typedef struct
 {
 	unsigned char *name;
 	struct QUESTION *ques;
 } QUERY;
 
-//void dns_get_a(char *buffer, char **ip_addr);
 void change_to_dns_name_format(unsigned char* dns, unsigned char* host);
 void dns_query_a_record(char *server, char *host, char *ip_addr[]);
 void dns_query_ptr_record(char *server, char *ip, char *domains[]);
 void prep_inaddr_arpa(char *dest, char *src);
 unsigned char* read_name(unsigned char *reader, unsigned char *buffer, int *count);
-//void dns_print_packet_info(char *buffer);
 
 #endif /* DNS_H */

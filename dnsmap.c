@@ -1,38 +1,21 @@
 /******************************************************************************
+ *    Copyright 2012 André Gasser
  *
- * DNSMAP Version 0.1
- * Written by sh0ka 2012
+ *    This file is part of Dnsmap.
  *
- * Command line parameters:
- * --reverse, -r                   Do reverse DNS lookups
- *                                 (if not specified, a forward DNS lookup
- *                                 will be performed)
- * --servers, -s <ip1, ip2, ...>   List of DNS servers to query
- * --domain, -d <domain name>      Domain name to map, e.g. foo.org
- *                                 (Forward mode only)
- * --inputfile, -i <filename>      File containing a host or ip, depending
- *                                 on the mode choosen (forward, reverse).
- * --outputfile, -o <filename>     Results will be written to this file if
- *                                 specified
- * --verbosity, -v <level>         Specify verbosity level
- 1 = Errors only
- 2 = Informational output
- 3 = Debug Output
- * --help, -h                      Display help page
+ *    Dnsmap is free software: you can redistribute it and/or modify
+ *    it under the terms of the GNU General Public License as published by
+ *    the Free Software Foundation, either version 3 of the License, or
+ *    (at your option) any later version.
  *
- * Related links:
- * --------------
+ *    Dnsmap is distributed in the hope that it will be useful,
+ *    but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *    GNU General Public License for more details.
  *
- * Reverse DNS lookups
- * http://www.xinotes.org/notes/note/1665/  
- *
- * RFC 1034 - Domain Names - Concepts and Facilities
- * http://www.ietf.org/rfc/rfc1035.txt
- *
- * RFC 1035 - Domain Implementation and Specification
- * http://www.ietf.org/rfc/rfc1035.txt
- *
- ******************************************************************************/
+ *    You should have received a copy of the GNU General Public License
+ *    along with Dnsmap.  If not, see <http://www.gnu.org/licenses/>.
+ *****************************************************************************/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -117,9 +100,12 @@ int main(int argc, char *argv[])
 	/* Allocate structures on heap */
 	params = malloc(sizeof(cmd_params));
 
-	printf("\n\n");
-	printf("%s %s by André Gasser (sh0ka)\n", APP_NAME, APP_VERSION);
-	printf("----------------------------------\n");
+	printf("%s  Copyright (C) 2012  André Gasser\n", APP_NAME);
+    printf("This program comes with ABSOLUTELY NO WARRANTY.\n");
+    printf("This is free software, and you are welcome to redistribute it\n");
+    printf("under certain conditions.\n");
+	printf("\n");
+	printf("Executing %s Version %s\n", APP_NAME, APP_VERSION);
 	printf("\n");
 
 	/* Parse commandline args */
@@ -964,11 +950,11 @@ void chomp(char *s) {
 	*s = 0;
 }
 
-// Display a helpful page
+/* Display a helpful page */
 void display_help_page(void)
 {
 	printf("APP_NAME APP_VERSION\n");
-	printf("Written by sh0ka\n");
+	printf("Written by André Gasser\n");
 	printf("This tool is GPL'ed software. Use as you like.\n");
 	printf("\n");
 	printf("Syntax:\n");
