@@ -81,6 +81,7 @@ typedef struct
 	struct workitem *wi_list;
 	int reverse;
 	struct result *result_list;
+	char *server;
 } thread_params;
 
 /* Function prototypes */
@@ -97,7 +98,7 @@ void dist_workitems(workitem **wi_list, workitem **wi_t1, workitem **wi_t2,
 int count_workitems(workitem *wi_list);
 void *proc_workitems(void *arg);
 void write_results(result *results);
-
+char *get_random_server(void);
 
 /* Global vars */
 cmd_params *params;
@@ -110,6 +111,8 @@ int main(int argc, char *argv[])
 {
 	int ret = 0;
 
+	/* Initialize pseudo-random number generator */
+	srand((unsigned)time(NULL));
 
 	/* Allocate structures on heap */
 	params = malloc(sizeof(cmd_params));
@@ -181,7 +184,7 @@ int parse_cmd_args(int *argc, char *argv[])
 	params->domain = "";
 	params->inputfile = "";
 	params->outputfile = "";
-	params->verbosity = 1;
+	params->verbosity = 2;
 
 	while (1)
 	{
@@ -349,31 +352,36 @@ int do_dns_lookups(void)
 	logline(LOG_DEBUG, "Thread 4 workitems: %d", count_workitems(wi_t4));
 	logline(LOG_DEBUG, "Thread 5 workitems: %d", count_workitems(wi_t5));
 
-	/* Start pthreads */
+	/* Prepare data structures for threads */
 	t1_params.thread_id = 1;
 	t1_params.wi_list = wi_t1;
 	t1_params.reverse = params->reverse;
 	t1_params.result_list = NULL;
-	
+	t1_params.server = get_random_server();
+
 	t2_params.thread_id = 2;
 	t2_params.wi_list = wi_t2;
 	t2_params.reverse = params->reverse;
 	t2_params.result_list = NULL;
+	t2_params.server = get_random_server();
 	
 	t3_params.thread_id = 3;
 	t3_params.wi_list = wi_t3;
 	t3_params.reverse = params->reverse;
 	t3_params.result_list = NULL;
+	t3_params.server = get_random_server();
 	
 	t4_params.thread_id = 4;
 	t4_params.wi_list = wi_t4;
 	t4_params.reverse = params->reverse;
 	t4_params.result_list = NULL;
+	t4_params.server = get_random_server();
 
 	t5_params.thread_id = 5;
 	t5_params.wi_list = wi_t5;
 	t5_params.reverse = params->reverse;
 	t5_params.result_list = NULL;
+	t5_params.server = get_random_server();
 
 	if (pthread_create(&t1,	NULL, proc_workitems, &t1_params))
 	{
@@ -790,7 +798,7 @@ void *proc_workitems(void *arg)
 
 	wi_list = t_params->wi_list;
 
-	logline(LOG_DEBUG, "Thread %d: Input params: reverse = %d", t_params->thread_id, t_params->reverse);   
+	logline(LOG_DEBUG, "Thread %d: Input params: reverse = %d, server = %s", t_params->thread_id, t_params->reverse, t_params->server);   
 
 	while (wi_list)
 	{
@@ -923,6 +931,29 @@ void do_reverse_dns_lookup(char *server, char *ip, result **result_list)
 		*result_list = list_orig_startaddr;
 	}
 }
+
+/*
+ * Choose a random server out of server array.
+ */
+char *get_random_server(void)
+{
+	int i = 0;
+	int rnd = 0;
+
+	/* Count servers available */
+	while (params->servers[i] != NULL)
+	{
+		i++;
+	}
+
+	/* Choose a random number between 0 and i-1 */
+	rnd = rand() % i;
+
+	return params->servers[rnd];
+}
+
+
+
 
 /*
  * Removes newlines \n from the char array.
