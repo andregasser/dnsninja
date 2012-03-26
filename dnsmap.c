@@ -14,7 +14,10 @@
  *                                 on the mode choosen (forward, reverse).
  * --outputfile, -o <filename>     Results will be written to this file if
  *                                 specified
- * --verbose, -v                   Generate verbose output.
+ * --verbosity, -v <level>         Specify verbosity level
+                                     1 = Errors only
+								     2 = Informational output
+								     3 = Debug Output
  * --help, -h                      Display help page
  *
  * Related links:
@@ -53,7 +56,7 @@ typedef struct
 	char *outputfile;
 	int reverse;
 	int help;
-	int verbose;
+	int verbosity;
 } cmd_params;
 
 /* Used for storing workitems inside single linked list */
@@ -80,7 +83,6 @@ typedef struct
 	struct result *result_list;
 } thread_params;
 
-
 /* Function prototypes */
 int parse_cmd_args(int *argc, char *argv[]);
 int parse_server_cmd_arg(char *optarg, char *servers[]);
@@ -101,6 +103,9 @@ void write_results(result *results);
 cmd_params *params;
 pthread_t t1, t2, t3, t4, t5;
 
+/*
+ * App entry point. The place where everything starts...
+ */
 int main(int argc, char *argv[]) 
 {
 	int ret = 0;
@@ -130,8 +135,14 @@ int main(int argc, char *argv[])
 	}
 
 	/* Set verbosity level */
-	params->verbose == 1 ? set_loglevel(LOG_DEBUG) : set_loglevel(LOG_INFO);
-	
+	switch (params->verbosity)
+	{
+		case 1: set_loglevel(LOG_ERROR); break;
+		case 2: set_loglevel(LOG_INFO); break;
+		case 3: set_loglevel(LOG_DEBUG); break;
+		default: set_loglevel(LOG_ERROR);
+	}
+
 	// Display help page if desired. Otherwise, do DNS lookups
 	if (params->help)
 	{
@@ -170,7 +181,7 @@ int parse_cmd_args(int *argc, char *argv[])
 	params->domain = "";
 	params->inputfile = "";
 	params->outputfile = "";
-	params->verbose = 0;
+	params->verbosity = 1;
 
 	while (1)
 	{
@@ -182,7 +193,7 @@ int parse_cmd_args(int *argc, char *argv[])
 			{ "inputfile",	required_argument, 0, 'i' },
 			{ "outputfile", required_argument, 0, 'o' },
 			{ "help",		no_argument,       0, 'h' },
-			{ "verbose",	no_argument,       0, 'v' },
+			{ "verbosity",	required_argument, 0, 'v' },
 			{ 0, 0, 0, 0 }
 		};
 
@@ -190,7 +201,7 @@ int parse_cmd_args(int *argc, char *argv[])
 		int option_index = 0;
 		int c;
 
-		c = getopt_long(*argc, argv, "rs:d:i:o:hv", long_options, &option_index);
+		c = getopt_long(*argc, argv, "rs:d:i:o:hv:", long_options, &option_index);
 
 		/* Detect the end of the options */
 		if (c == -1)
@@ -219,7 +230,7 @@ int parse_cmd_args(int *argc, char *argv[])
 				params->help = 1;
 				break;
 			case 'v':
-				params->verbose = 1;
+				params->verbosity = atoi(optarg);
 				break;
 		}
 	}
@@ -274,10 +285,11 @@ int do_dns_lookups(void)
 	int i = 0;
 	thread_params t1_params, t2_params;
 	void *t1_status, *t2_status;
+	result *list_iterator;
 	//result *t1_result, *t2_result;
 	workitem *wi_start, *wi_t1, *wi_t2, *wi_t3, *wi_t4, *wi_t5;
 
-
+	list_iterator = NULL;
 	wi_start = NULL;
 	wi_t1 = NULL;
 	wi_t2 = NULL;
@@ -286,39 +298,39 @@ int do_dns_lookups(void)
 	wi_t5 = NULL;
 
 	/* Display some info */
-	logline(LOG_INFO, "Using DNS servers:");
+	logline(LOG_INFO, "Run configuration:");
+	logline(LOG_INFO, "    Using DNS servers:");
 	while (params->servers[i] != '\0')
 	{
-		logline(LOG_INFO, "    %s", params->servers[i]);
+		logline(LOG_INFO, "        %s", params->servers[i]);
 		i++;
 	}
 	if (params->domain)
 	{
-		logline(LOG_DEBUG, "Using domain: %s", params->domain);
+		logline(LOG_INFO, "    Using domain: %s", params->domain);
 	}
 	if (params->inputfile)
 	{
-		logline(LOG_DEBUG, "Using input file: %s", params->inputfile);
+		logline(LOG_INFO, "    Using input file: %s", params->inputfile);
 	}
 	if (params->outputfile)
 	{
-		logline(LOG_DEBUG, "Using output file: %s", params->outputfile);
+		logline(LOG_INFO, "    Using output file: %s", params->outputfile);
 	}
 	if (params->reverse)
 	{
-		logline(LOG_DEBUG, "DNS lookup mode: Reverse");
+		logline(LOG_INFO, "    DNS lookup mode: Reverse");
 	}
 	else
 	{
-		logline(LOG_DEBUG, "DNS lookup mode: Forward");
+		logline(LOG_INFO, "    DNS lookup mode: Forward");
 	}
-	if (params->verbose)
+	switch (params->verbosity)
 	{
-		logline(LOG_DEBUG, "Verbose mode: On");
-	}
-	else
-	{
-		logline(LOG_DEBUG, "Verbose mode: Off");
+		case 1: logline(LOG_INFO, "    Verbosity: Error"); break;
+		case 2: logline(LOG_INFO, "    Verbosity: Info"); break;
+		case 3: logline(LOG_INFO, "    Verbosity: Debug"); break;
+		default: logline(LOG_INFO, "    Verbosity: Error");
 	}
 	
 	/* Load workitems into linked list */
@@ -345,7 +357,7 @@ int do_dns_lookups(void)
 	t2_params.wi_list = wi_t2;
 	t2_params.reverse = params->reverse;
 	t2_params.result_list = NULL;
-	
+
 	if (pthread_create(&t1,	NULL, proc_workitems, &t1_params))
 	{
 		logline(LOG_ERROR, "Could not create thread 1");
@@ -355,21 +367,21 @@ int do_dns_lookups(void)
 	{
 		logline(LOG_DEBUG, "Thread 1 created");
 	}
-/*	
-	if (pthread_create(&t2,	NULL, proc_workitems, &t2_params))
-	{
-logline(LOG_ERROR, "Could not create thread 2");
+	/*	
+		if (pthread_create(&t2,	NULL, proc_workitems, &t2_params))
+		{
+		logline(LOG_ERROR, "Could not create thread 2");
 		return -1;
-	}
-	else
-	{
+		}
+		else
+		{
 		logline(LOG_DEBUG, "Thread 2 created");
-	}
-*/	
+		}
+	 */	
 
 	/* Wait for threads to finish */
 	pthread_join(t1, &t1_status);
-//	pthread_join(t2, &t2_status);
+	//	pthread_join(t2, &t2_status);
 
 	/* Extract results out of threads */
 	if ((int *)t1_status < 0)
@@ -381,7 +393,7 @@ logline(LOG_ERROR, "Could not create thread 2");
 		/* Extract results from thread 1 */
 		logline(LOG_DEBUG, "Thread 1 finished successfully");
 	}
-	
+
 	if ((int *)t2_status < 0)
 	{
 		logline(LOG_ERROR, "Thread 2 had an error condition");
@@ -391,15 +403,24 @@ logline(LOG_ERROR, "Could not create thread 2");
 		/* Extract results from thread 2 */
 		logline(LOG_DEBUG, "Thread 2 finished successfully");
 	}
-	
+
 
 
 	/* ... */
 
 	/* TODO: Consolidate results */
+	
+	/* Print results on screen */
+	list_iterator = t1_params.result_list;
+	while (list_iterator)
+	{
+		logline(LOG_INFO, "Host: %s, IP: %s", list_iterator->host, list_iterator->ip);
+		list_iterator = list_iterator->next;
+	}
 
 	/* TODO: Export results to text file */
-	write_results(t1_params.result_list);
+	list_iterator = t1_params.result_list;
+	write_results(list_iterator);
 }
 
 
@@ -622,7 +643,7 @@ void *proc_workitems(void *arg)
 
 	/* Cast input param to thread_params struct */
 	thread_params* t_params = (thread_params *)arg;
-	
+
 	wi_list = t_params->wi_list;
 
 	logline(LOG_DEBUG, "Thread %d: Input params: reverse = %d", t_params->thread_id, t_params->reverse);   
@@ -638,16 +659,16 @@ void *proc_workitems(void *arg)
 		{
 			do_forward_dns_lookup(params->servers[0], wi_list->wi, t_params->result_list);
 		}
-				
+
 		wi_list = wi_list->next;
 	}
 
 	/* Temporary print list output */
-	while (t_params->result_list)
-	{
-		printf("Result: Host: %s IP: %s\n", t_params->result_list->host, t_params->result_list->ip);
-		t_params->result_list = t_params->result_list->next;
-	}
+	//while (t_params->result_list)
+	//{
+	//	printf("Result: Host: %s IP: %s\n", t_params->result_list->host, t_params->result_list->ip);
+	//	t_params->result_list = t_params->result_list->next;
+	//}
 }
 
 
@@ -713,7 +734,7 @@ void do_reverse_dns_lookup(char *server, char *ip, result **result_list)
 	{
 		/* exit loop as soon as an empty entry appears */
 		if (domains[i] == NULL) { break; }
-			
+
 		/* Add new entry to list */	
 		list_entry = (result *)malloc(sizeof(result));
 		list_entry->host = (char *)malloc(strlen(domains[i]));
@@ -748,7 +769,7 @@ void do_reverse_dns_lookup(char *server, char *ip, result **result_list)
 		{
 			*result_list = (*result_list)->next;
 		}
-		
+
 		/* Attach newly generated linked list to the end of 
 		 * master linked list 
 		 */

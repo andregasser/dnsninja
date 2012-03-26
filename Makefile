@@ -15,3 +15,4 @@ log.o :
 clean : 
 	rm -f dnsmap
 	rm -f *.o
+	rm -f *~
