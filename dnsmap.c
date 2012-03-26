@@ -15,9 +15,9 @@
  * --outputfile, -o <filename>     Results will be written to this file if
  *                                 specified
  * --verbosity, -v <level>         Specify verbosity level
-                                     1 = Errors only
-								     2 = Informational output
-								     3 = Debug Output
+ 1 = Errors only
+ 2 = Informational output
+ 3 = Debug Output
  * --help, -h                      Display help page
  *
  * Related links:
@@ -283,12 +283,13 @@ int parse_server_cmd_arg(char *optarg, char *servers[])
 int do_dns_lookups(void)
 {
 	int i = 0;
-	thread_params t1_params, t2_params;
-	void *t1_status, *t2_status;
+	thread_params t1_params, t2_params, t3_params, t4_params, t5_params;
+	void *t1_status, *t2_status, *t3_status, *t4_status, *t5_status;
 	result *list_iterator;
-	//result *t1_result, *t2_result;
+	result *result_all;
 	workitem *wi_start, *wi_t1, *wi_t2, *wi_t3, *wi_t4, *wi_t5;
 
+	result_all = NULL;
 	list_iterator = NULL;
 	wi_start = NULL;
 	wi_t1 = NULL;
@@ -332,7 +333,7 @@ int do_dns_lookups(void)
 		case 3: logline(LOG_INFO, "    Verbosity: Debug"); break;
 		default: logline(LOG_INFO, "    Verbosity: Error");
 	}
-	
+
 	/* Load workitems into linked list */
 	logline(LOG_DEBUG, "Loading workitems...");
 	load_workitems(params->inputfile, &wi_start, params->reverse);	
@@ -353,10 +354,26 @@ int do_dns_lookups(void)
 	t1_params.wi_list = wi_t1;
 	t1_params.reverse = params->reverse;
 	t1_params.result_list = NULL;
+	
 	t2_params.thread_id = 2;
 	t2_params.wi_list = wi_t2;
 	t2_params.reverse = params->reverse;
 	t2_params.result_list = NULL;
+	
+	t3_params.thread_id = 3;
+	t3_params.wi_list = wi_t3;
+	t3_params.reverse = params->reverse;
+	t3_params.result_list = NULL;
+	
+	t4_params.thread_id = 4;
+	t4_params.wi_list = wi_t4;
+	t4_params.reverse = params->reverse;
+	t4_params.result_list = NULL;
+
+	t5_params.thread_id = 5;
+	t5_params.wi_list = wi_t5;
+	t5_params.reverse = params->reverse;
+	t5_params.result_list = NULL;
 
 	if (pthread_create(&t1,	NULL, proc_workitems, &t1_params))
 	{
@@ -367,21 +384,53 @@ int do_dns_lookups(void)
 	{
 		logline(LOG_DEBUG, "Thread 1 created");
 	}
-	/*	
-		if (pthread_create(&t2,	NULL, proc_workitems, &t2_params))
-		{
+
+	if (pthread_create(&t2,	NULL, proc_workitems, &t2_params))
+	{
 		logline(LOG_ERROR, "Could not create thread 2");
 		return -1;
-		}
-		else
-		{
+	}
+	else
+	{
 		logline(LOG_DEBUG, "Thread 2 created");
-		}
-	 */	
+	}
+
+	if (pthread_create(&t3,	NULL, proc_workitems, &t3_params))
+	{
+		logline(LOG_ERROR, "Could not create thread 3");
+		return -1;
+	}
+	else
+	{
+		logline(LOG_DEBUG, "Thread 3 created");
+	}
+
+	if (pthread_create(&t4,	NULL, proc_workitems, &t4_params))
+	{
+		logline(LOG_ERROR, "Could not create thread 4");
+		return -1;
+	}
+	else
+	{
+		logline(LOG_DEBUG, "Thread 4 created");
+	}
+
+	if (pthread_create(&t5,	NULL, proc_workitems, &t5_params))
+	{
+		logline(LOG_ERROR, "Could not create thread 5");
+		return -1;
+	}
+	else
+	{
+		logline(LOG_DEBUG, "Thread 5 created");
+	}
 
 	/* Wait for threads to finish */
 	pthread_join(t1, &t1_status);
-	//	pthread_join(t2, &t2_status);
+	pthread_join(t2, &t2_status);
+	pthread_join(t3, &t3_status);
+	pthread_join(t4, &t4_status);
+	pthread_join(t5, &t5_status);
 
 	/* Extract results out of threads */
 	if ((int *)t1_status < 0)
@@ -404,14 +453,109 @@ int do_dns_lookups(void)
 		logline(LOG_DEBUG, "Thread 2 finished successfully");
 	}
 
+	if ((int *)t3_status < 0)
+	{
+		logline(LOG_ERROR, "Thread 3 had an error condition");
+	}
+	else
+	{
+		/* Extract results from thread 3 */
+		logline(LOG_DEBUG, "Thread 3 finished successfully");
+	}
 
+	if ((int *)t4_status < 0)
+	{
+		logline(LOG_ERROR, "Thread 4 had an error condition");
+	}
+	else
+	{
+		/* Extract results from thread 4 */
+		logline(LOG_DEBUG, "Thread 4 finished successfully");
+	}
 
-	/* ... */
+	if ((int *)t5_status < 0)
+	{
+		logline(LOG_ERROR, "Thread 5 had an error condition");
+	}
+	else
+	{
+		/* Extract results from thread 5 */
+		logline(LOG_DEBUG, "Thread 5 finished successfully");
+	}
 
-	/* TODO: Consolidate results */
-	
+	/* Consolidate results */
+	if (result_all == NULL)
+	{
+		result_all = t1_params.result_list;
+	}
+	else
+	{
+		list_iterator = result_all;
+		while (list_iterator->next)
+		{
+			list_iterator = list_iterator->next;
+		}
+		list_iterator->next = t1_params.result_list;
+	}
+
+	if (result_all == NULL)
+	{
+		result_all = t2_params.result_list;
+	}
+	else
+	{
+		list_iterator = result_all;
+		while (list_iterator->next)
+		{
+			list_iterator = list_iterator->next;
+		}
+		list_iterator->next = t2_params.result_list;
+	}
+
+	if (result_all == NULL)
+	{
+		result_all = t3_params.result_list;
+	}
+	else
+	{
+		list_iterator = result_all;
+		while (list_iterator->next)
+		{
+			list_iterator = list_iterator->next;
+		}
+		list_iterator->next = t3_params.result_list;
+	}
+
+	if (result_all == NULL)
+	{
+		result_all = t4_params.result_list;
+	}
+	else
+	{
+		list_iterator = result_all;
+		while (list_iterator->next)
+		{
+			list_iterator = list_iterator->next;
+		}
+		list_iterator->next = t4_params.result_list;
+	}
+
+	if (result_all == NULL)
+	{
+		result_all = t5_params.result_list;
+	}
+	else
+	{
+		list_iterator = result_all;
+		while (list_iterator->next)
+		{
+			list_iterator = list_iterator->next;
+		}
+		list_iterator->next = t5_params.result_list;
+	}
+
 	/* Print results on screen */
-	list_iterator = t1_params.result_list;
+	list_iterator = result_all;
 	while (list_iterator)
 	{
 		logline(LOG_INFO, "Host: %s, IP: %s", list_iterator->host, list_iterator->ip);
@@ -419,7 +563,7 @@ int do_dns_lookups(void)
 	}
 
 	/* TODO: Export results to text file */
-	list_iterator = t1_params.result_list;
+	list_iterator = result_all;
 	write_results(list_iterator);
 }
 

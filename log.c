@@ -16,15 +16,23 @@ void logline(int loglevel, const char* format, ...)
 	if (loglevel <= global_loglevel)
 	{
 		char timestr[20];
+		char *loginfo;
 		struct tm *ptr;
 		time_t lt;
 
 		lt = time(NULL);
 		ptr = localtime(&lt);
-
 		strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", ptr);
 
-		printf("[%s] ", timestr);
+		switch (loglevel)
+		{
+			case LOG_ERROR: loginfo = "E"; break;
+			case LOG_INFO: loginfo = "I"; break;
+			case LOG_DEBUG: loginfo = "D"; break;
+			default: loginfo = "I"; 
+		}
+
+		printf("[%s %s] ", timestr, loginfo);
 		va_start(args, format);
 		vfprintf(stdout, format, args);
 		va_end(args);
