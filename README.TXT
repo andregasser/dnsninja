@@ -26,11 +26,13 @@ modify and distribute it.
   2.1 - Overview
   2.2 - Features
   2.3 - Usage
-    2.3.1 - Doing forward DNS lookups
-    2.3.2 - Doing reverse DNS lookups
-    2.3.3 - Saving results to a file
+	2.3.1 - Command-line arguments
+    2.3.2 - Doing forward DNS lookups
+    2.3.3 - Doing reverse DNS lookups
+    2.3.4 - Saving results to a file
   2.4 - How to get it
-  2.5 - License
+  2.5 - Building from source
+  2.6 - License
   
 3 - Bibliography
 
@@ -79,7 +81,48 @@ the current version of DNSMAP offers the following features:
 
 ----[ 2.3 - Usage ]-----------------------------------------------------
 
-----[ 2.3.1 - Doing forward DNS lookups ]-------------------------------
+----[ 2.3.1 - Command-line arguments ]----------------------------------
+
+The following command-line arguments are supported:
+
+--reverse, -r                   
+
+    Do reverse DNS lookups. If not specified, a forward DNS lookup will
+    be performed.
+
+--servers=<ip1,ip2,...>, -s <ip1,ip2,...>
+	
+	List of DNS servers, which shall be used as targets for DNS queries.
+
+--domain=<domain name>, -d <domain name>
+
+    When doing forward DNS lookups, the top- and second-level-domain can 
+    be specified here (e.g. foo.org).
+
+--inputfile=<filename>, -i <filename>      
+
+    The file containing either a list of ip-addresses or host names, 
+    depending on the lookup mode (reverse, forward).
+                                
+--outputfile=<filename>, -o <filename>     
+
+    Allows you to write the query results into a simple, comma-separated
+    CSV-file. This allows you to further process the results in other 
+    tools.
+                                
+--verbosity=<level>, -v <level>         
+
+    Specify verbosity level. The following levels are allowed:
+        1 = Errors only
+        2 = Informational output
+        3 = Debug Output
+
+--help, -h 
+
+    Display help page.
+
+
+----[ 2.3.2 - Doing forward DNS lookups ]-------------------------------
 
 Usage of this tool is quite simple. Do do a simple forward DNS lookup
 search based on a wordlist, run the following command:
@@ -110,7 +153,7 @@ backup.mydomain.com
 If a host has been found, the ip address of this host is returned.
 
 
-----[ 2.3.2 - Doing reverse DNS lookups ]-------------------------------
+----[ 2.3.3 - Doing reverse DNS lookups ]-------------------------------
 
 Doing reverse DNS lookups works similar. To do reverse DNS lookups based
 on a list of ip addresses, run the following command:
@@ -122,7 +165,7 @@ be sent to this machine. As a result, you will receive the name of the
 domains associated with that ip. 
 
 
-----[ 2.3.3 - Saving output to a file ]---------------------------------
+----[ 2.3.4 - Saving output to a file ]---------------------------------
 
 
 
@@ -134,9 +177,24 @@ You'll always find the latest version of this tool on GitHub.
 blabla...
 
 
+----[ 2.5 - Building from source ]--------------------------------------
+
+The source distribution can be built from source by invoking the
+following commands on your box:
+
+$ gunzip dnsmap-<version>.tar.gz
+$ tar xvf dnsmap-<version>.tar
+
+Then switch into the newly created directory and compile it using:
+
+$ make
+
+Optionally, you can compile it in debug mode using:
+
+$ make DEBUG=1
 
 
-----[ 2.5 - License ]---------------------------------------------------
+----[ 2.6 - License ]---------------------------------------------------
 
 Copyright 2012 André Gasser
 
@@ -169,50 +227,4 @@ along with Dnsmap.  If not, see <http://www.gnu.org/licenses/>.
 
 Mail:      andre.gasser@gmx.ch
 Jabber:    sh0ka@jabber.ccc.de
-
-
-
-
-    
-    
-    
-    
-    
-    
-    
-/******************************************************************************
- *
- * DNSMAP Version 0.1
- * Written by sh0ka 2012
- *
- * Command line parameters:
- * --reverse, -r                   Do reverse DNS lookups
- *                                 (if not specified, a forward DNS lookup
- *                                 will be performed)
- * --servers, -s <ip1, ip2, ...>   List of DNS servers to query
- * --domain, -d <domain name>      Domain name to map, e.g. foo.org
- *                                 (Forward mode only)
- * --inputfile, -i <filename>      File containing a host or ip, depending
- *                                 on the mode choosen (forward, reverse).
- * --outputfile, -o <filename>     Results will be written to this file if
- *                                 specified
- * --verbosity, -v <level>         Specify verbosity level
- 1 = Errors only
- 2 = Informational output
- 3 = Debug Output
- * --help, -h                      Display help page
- *
- * Related links:
- * --------------
- *
- * Reverse DNS lookups
- * http://www.xinotes.org/notes/note/1665/  
- *
- * RFC 1034 - Domain Names - Concepts and Facilities
- * http://www.ietf.org/rfc/rfc1035.txt
- *
- * RFC 1035 - Domain Implementation and Specification
- * http://www.ietf.org/rfc/rfc1035.txt
- *
- ******************************************************************************/
 

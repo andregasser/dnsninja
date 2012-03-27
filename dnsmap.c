@@ -81,11 +81,14 @@ void dist_workitems(workitem **wi_list, workitem **wi_t1, workitem **wi_t2,
 int count_workitems(workitem *wi_list);
 void *proc_workitems(void *arg);
 void write_results(result *results);
+int get_servers_count(void);
 char *get_random_server(void);
+void show_gnu_banner(void);
 
 /* Global vars */
 cmd_params *params;
 pthread_t t1, t2, t3, t4, t5;
+
 
 /*
  * App entry point. The place where everything starts...
@@ -100,27 +103,27 @@ int main(int argc, char *argv[])
 	/* Allocate structures on heap */
 	params = malloc(sizeof(cmd_params));
 
-	printf("%s  Copyright (C) 2012  André Gasser\n", APP_NAME);
-    printf("This program comes with ABSOLUTELY NO WARRANTY.\n");
-    printf("This is free software, and you are welcome to redistribute it\n");
-    printf("under certain conditions.\n");
-	printf("\n");
-	printf("Executing %s Version %s\n", APP_NAME, APP_VERSION);
-	printf("\n");
-
 	/* Parse commandline args */
 	ret = parse_cmd_args(&argc, argv);
+	if (params->help)
+	{
+		display_help_page();
+		return 0;
+	}
 	if ((ret == -1) || (ret == -4)) 
 	{
-		logline(LOG_ERROR, "Error: Server must be specified (use option -s)"); 	
+		logline(LOG_ERROR, "Error: Server must be specified (use option -s)"); 
+		return ret;	
 	}
 	else if (ret == -2)
 	{
 		logline(LOG_ERROR, "Error: Domain must be specified (use option -d)");
+		return ret;
 	}
 	else if ((ret == -3) || (ret == -5))
 	{
-		logline(LOG_ERROR, "Error: File must be specified (use option -l)");
+		logline(LOG_ERROR, "Error: Input file must be specified (use option -i)");
+		return ret;
 	}
 
 	/* Set verbosity level */
@@ -132,25 +135,23 @@ int main(int argc, char *argv[])
 		default: set_loglevel(LOG_ERROR);
 	}
 
-	// Display help page if desired. Otherwise, do DNS lookups
-	if (params->help)
+	show_gnu_banner();
+	printf("Executing %s Version %s\n", APP_NAME, APP_VERSION);
+	printf("\n");
+	
+	/* Display help page if desired. Otherwise, do DNS lookups */
+	ret = do_dns_lookups();
+	if (ret < 0)
 	{
-		display_help_page();
-	}
-	else
-	{
-		ret = do_dns_lookups();
-		if (ret < 0)
-		{
-			logline(LOG_ERROR, "Error: Could not perform DNS lookups. Errorcode: %s", ret);
-		}
+		logline(LOG_ERROR, "Error: Could not perform DNS lookups. Errorcode: %s", ret);
 	}
 
-	// Free memory on heap
+	/* Free memory on heap */
 	free(params);
 
 	return ret;
 }
+
 
 /*
  * Parse command line arguments and store them in a global struct.
@@ -160,16 +161,16 @@ int parse_cmd_args(int *argc, char *argv[])
 	int i;
 	int ret = 0;
 
-	// Init struct
+	/* Init struct */
 	params->reverse = 0;
 	params->help = 0;
 
 	for (i = 0; i < 5; i++)
-		params->servers[i] = '\0';
+		params->servers[i] = NULL;
 
-	params->domain = "";
-	params->inputfile = "";
-	params->outputfile = "";
+	params->domain = NULL;
+	params->inputfile = NULL;
+	params->outputfile = NULL;
 	params->verbosity = 2;
 
 	while (1)
@@ -202,7 +203,7 @@ int parse_cmd_args(int *argc, char *argv[])
 				params->reverse = 1;						
 				break;
 			case 's':
-				// Process server parameters
+				/* Process server parameters */
 				ret = parse_server_cmd_arg(optarg, params->servers);
 				if (ret != 0) { return ret; }
 				break;
@@ -224,23 +225,24 @@ int parse_cmd_args(int *argc, char *argv[])
 		}
 	}
 
-	// Check param dependencies
+	/* Check param dependencies */
 	if (params->reverse == 0)
 	{
-		// Forward lookups require domain, server and inputfile params
-		if (params->servers == '\0') { return -1; }
-		if (params->domain == '\0') { return -2; }
-		if (params->inputfile == '\0') { return -3; }
+		/* Forward lookups require domain, server and inputfile params */
+		if (get_servers_count() == 0) { return -1; }
+		if (params->domain == NULL) { return -2; }
+		if (params->inputfile == NULL) { return -3; }
 	}
 	else
 	{
-		// Reverse lookups require server and inputfile params
-		if (params->servers == '\0') { return -4; }
-		if (params->inputfile == '\0') { return -5; }
+		/* Reverse lookups require server and inputfile params */
+		if (get_servers_count() == 0) { return -4; }
+		if (params->inputfile == NULL) { return -5; }
 	}
 
 	return 0;
 }
+
 
 /* 
  * Parse server option (-s).
@@ -255,16 +257,17 @@ int parse_server_cmd_arg(char *optarg, char *servers[])
 		ptr = strtok(optarg, ",");
 		while (ptr != NULL)
 		{
-			// Server speichern
+			/* Store server ip */
 			servers[i] = malloc(strlen(ptr));
 			strcpy(servers[i], ptr);
 			i++;
 
-			// Get next token
+			/* Get next token */
 			ptr = strtok(NULL, ",");
 		}
 	}
 }
+
 
 /*
  * Main function for doing DNS lookups.
@@ -556,7 +559,7 @@ int do_dns_lookups(void)
 		list_iterator = list_iterator->next;
 	}
 
-	/* TODO: Export results to text file */
+	/* Export results to text file */
 	list_iterator = result_all;
 	write_results(list_iterator);
 }
@@ -583,8 +586,6 @@ void write_results(result *results)
 		fclose(f);
 	}
 }
-
-
 
 
 /*
@@ -771,7 +772,6 @@ int count_workitems(workitem *wi_list)
 }
 
 
-
 /*
  * Process a list of workitems.
  */
@@ -800,13 +800,6 @@ void *proc_workitems(void *arg)
 
 		wi_list = wi_list->next;
 	}
-
-	/* Temporary print list output */
-	//while (t_params->result_list)
-	//{
-	//	printf("Result: Host: %s IP: %s\n", t_params->result_list->host, t_params->result_list->ip);
-	//	t_params->result_list = t_params->result_list->next;
-	//}
 }
 
 
@@ -852,7 +845,10 @@ void do_forward_dns_lookup(char *server, char *host, result *result_list)
 	result_list = result_list_start;
 }
 
-// Perform a reverse dns lookup
+
+/*
+ * Perform a reverse dns lookup
+ */
 void do_reverse_dns_lookup(char *server, char *ip, result **result_list)
 {
 	result *list_orig_startaddr = *result_list;
@@ -918,6 +914,24 @@ void do_reverse_dns_lookup(char *server, char *ip, result **result_list)
 	}
 }
 
+
+/*
+ * Count servers provided by user
+ */
+int get_servers_count(void)
+{
+	int i = 0;
+	
+	/* Count servers available */
+	while (params->servers[i] != NULL)
+	{
+		i++;
+	}
+
+	return i;
+}
+
+
 /*
  * Choose a random server out of server array.
  */
@@ -926,19 +940,11 @@ char *get_random_server(void)
 	int i = 0;
 	int rnd = 0;
 
-	/* Count servers available */
-	while (params->servers[i] != NULL)
-	{
-		i++;
-	}
-
 	/* Choose a random number between 0 and i-1 */
-	rnd = rand() % i;
+	rnd = rand() % get_servers_count();
 
 	return params->servers[rnd];
 }
-
-
 
 
 /*
@@ -950,24 +956,38 @@ void chomp(char *s) {
 	*s = 0;
 }
 
+
 /* Display a helpful page */
 void display_help_page(void)
 {
-	printf("APP_NAME APP_VERSION\n");
-	printf("Written by André Gasser\n");
-	printf("This tool is GPL'ed software. Use as you like.\n");
-	printf("\n");
-	printf("Syntax:\n");
+	show_gnu_banner();
+	printf("\n\n");
+	printf("Syntax:\n\n");
 	printf("%s [options]\n", APP_NAME);
 	printf("\n\n");
-	printf("Parameter             Description\n");
-	printf("---------             ---------------------------------------------\n");
-	printf("--reverse, -r         Do a reverse DNS lookup. If not specified, a\n");
-	printf("                      forward DNS lookup will be performed.\n");
-	printf("--server, -s          IP of DNS server to query\n");
-	printf("--domain, -d          Domain to query. Only used when doing forward\n");
-	printf("                      DNS lookups\n");
-	printf("--inputfile, -i       File containint hostnames or IP addresses, depending\n");
-	printf("                      on query mode (forward, reverse\n");
+	printf("Parameters\n\n");
+	printf("--reverse, -r\n");
+	printf("\n");
+	printf("    Do a reverse DNS lookup. If not specified, a forward DNS lookup will be performed.\n");
+	printf("\n");
+	printf("--server=<ip1,ip2,...>, -s <ip1,ip2,...>\n");
+	printf("\n");
+	printf("    IP of DNS server to query.\n");
+	printf("\n");
+	printf("--domain=<mydomain>, -d <mydomain>\n");
+	printf("\n");
+	printf("    Domain to query. Only used when doing forward DNS lookups.\n");
+	printf("\n");
+	printf("--inputfile=<inputfile>, -i <inputfile>\n");
+	printf("\n");
+	printf("    File containining hostnames or IP addresses, depending on query mode (forward, reverse\n");
 	printf("\n\n");
+}
+
+void show_gnu_banner(void)
+{
+	printf("%s %s  Copyright (C) 2012  André Gasser\n", APP_NAME, APP_VERSION);
+    printf("This program comes with ABSOLUTELY NO WARRANTY.\n");
+    printf("This is free software, and you are welcome to redistribute it\n");
+    printf("under certain conditions.\n");
 }
