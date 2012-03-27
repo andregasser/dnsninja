@@ -1,4 +1,10 @@
 TODO's
 ------
-- Add multiple thread support
-- Add support for file storage
+- Let the user choose how many threads to use
+- Add additional request slowdown parameter (stealth mode)
+- Integrate pre-made and huge wordlist
+- Add opportunity to specify ranges of ips (hyphen notation)
+- Create install target in makefile
+- Improve memory allocation code (malloc()/free())
+- Improve linked list handling
+- Create MAN page
