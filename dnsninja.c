@@ -1,20 +1,20 @@
 /******************************************************************************
  *    Copyright 2012 André Gasser
  *
- *    This file is part of Dnsmap.
+ *    This file is part of Dnsninja.
  *
- *    Dnsmap is free software: you can redistribute it and/or modify
+ *    Dnsninja is free software: you can redistribute it and/or modify
  *    it under the terms of the GNU General Public License as published by
  *    the Free Software Foundation, either version 3 of the License, or
  *    (at your option) any later version.
  *
- *    Dnsmap is distributed in the hope that it will be useful,
+ *    Dnsninja is distributed in the hope that it will be useful,
  *    but WITHOUT ANY WARRANTY; without even the implied warranty of
  *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *    GNU General Public License for more details.
  *
  *    You should have received a copy of the GNU General Public License
- *    along with Dnsmap.  If not, see <http://www.gnu.org/licenses/>.
+ *    along with Dnsninja.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
 #include <stdio.h>
@@ -23,11 +23,12 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <pthread.h>
+#include <regex.h>
 #include "dns.h"
 #include "log.h"
 
 /* Define some constants */
-#define APP_NAME        "DNSMAP" /* Name of applicaton */
+#define APP_NAME        "DNSNINJA" /* Name of applicaton */
 #define APP_VERSION     "0.1"    /* Version of application */
 
 /* Used to store command-line args */
@@ -39,7 +40,8 @@ typedef struct
 	char *outputfile;
 	int reverse;
 	int help;
-	int verbosity;
+	int loglevel;
+	int version;
 } cmd_params;
 
 /* Used for storing workitems inside single linked list */
@@ -71,10 +73,13 @@ typedef struct
 int parse_cmd_args(int *argc, char *argv[]);
 int parse_server_cmd_arg(char *optarg, char *servers[]);
 int do_dns_lookups(void);
-void do_forward_dns_lookup(char *server, char *host, result *result_list);
+int check_input_file_host(void);
+int check_input_file_ip(void);
+void do_forward_dns_lookup(char *server, char *host, result **result_list);
 void do_reverse_dns_lookup(char *server, char *ip, result **result_list);
 void chomp(char *s);
 void display_help_page(void);
+void display_version_info(void);
 void load_workitems(char *inputfile, workitem **wi_start, int reverse);
 void dist_workitems(workitem **wi_list, workitem **wi_t1, workitem **wi_t2,
 		workitem **wi_t3, workitem **wi_t4, workitem **wi_t5);
@@ -110,24 +115,28 @@ int main(int argc, char *argv[])
 		display_help_page();
 		return 0;
 	}
-	if ((ret == -1) || (ret == -4)) 
+	if (params->version)
 	{
-		logline(LOG_ERROR, "Error: Server must be specified (use option -s)"); 
-		return ret;	
+		display_version_info();
+		return 0;
 	}
-	else if (ret == -2)
+	if (ret < 0)
 	{
-		logline(LOG_ERROR, "Error: Domain must be specified (use option -d)");
+		if ((ret == -1) || (ret == -4)) 
+			logline(LOG_ERROR, "Error: Server must be specified (use option -s)"); 
+		if (ret == -2)
+			logline(LOG_ERROR, "Error: Domain must be specified (use option -d)");
+		if ((ret == -3) || (ret == -5))
+			logline(LOG_ERROR, "Error: Input file must be specified (use option -i)");
+		if (ret == -6)
+			logline(LOG_ERROR, "Error: Invalid log level option specified (-l).");
+		logline(LOG_ERROR, "Use the -h option if you need help.");
 		return ret;
 	}
-	else if ((ret == -3) || (ret == -5))
-	{
-		logline(LOG_ERROR, "Error: Input file must be specified (use option -i)");
-		return ret;
-	}
+	
 
-	/* Set verbosity level */
-	switch (params->verbosity)
+	/* Set log level */
+	switch (params->loglevel)
 	{
 		case 1: set_loglevel(LOG_ERROR); break;
 		case 2: set_loglevel(LOG_INFO); break;
@@ -143,7 +152,7 @@ int main(int argc, char *argv[])
 	ret = do_dns_lookups();
 	if (ret < 0)
 	{
-		logline(LOG_ERROR, "Error: Could not perform DNS lookups. Errorcode: %s", ret);
+		logline(LOG_ERROR, "Error: Could not perform DNS lookups. Errorcode: %d", ret);
 	}
 
 	/* Free memory on heap */
@@ -171,7 +180,8 @@ int parse_cmd_args(int *argc, char *argv[])
 	params->domain = NULL;
 	params->inputfile = NULL;
 	params->outputfile = NULL;
-	params->verbosity = 2;
+	params->loglevel = LOG_INFO;
+	params->version = 0;
 
 	while (1)
 	{
@@ -183,7 +193,8 @@ int parse_cmd_args(int *argc, char *argv[])
 			{ "inputfile",	required_argument, 0, 'i' },
 			{ "outputfile", required_argument, 0, 'o' },
 			{ "help",		no_argument,       0, 'h' },
-			{ "verbosity",	required_argument, 0, 'v' },
+			{ "version",	no_argument,       0, 'v' },
+			{ "loglevel",	required_argument, 0, 'l' },
 			{ 0, 0, 0, 0 }
 		};
 
@@ -191,7 +202,7 @@ int parse_cmd_args(int *argc, char *argv[])
 		int option_index = 0;
 		int c;
 
-		c = getopt_long(*argc, argv, "rs:d:i:o:hv:", long_options, &option_index);
+		c = getopt_long(*argc, argv, "rs:d:i:o:hvl:", long_options, &option_index);
 
 		/* Detect the end of the options */
 		if (c == -1)
@@ -220,7 +231,12 @@ int parse_cmd_args(int *argc, char *argv[])
 				params->help = 1;
 				break;
 			case 'v':
-				params->verbosity = atoi(optarg);
+				params->version = 1;
+				break;
+			case 'l':
+				params->loglevel = atoi(optarg);
+	            if ((params->loglevel < 1) || (params->loglevel > 3))
+	            	return -6;
 				break;
 		}
 	}
@@ -275,6 +291,7 @@ int parse_server_cmd_arg(char *optarg, char *servers[])
 int do_dns_lookups(void)
 {
 	int i = 0;
+	int hostcount = 0;
 	thread_params t1_params, t2_params, t3_params, t4_params, t5_params;
 	void *t1_status, *t2_status, *t3_status, *t4_status, *t5_status;
 	result *list_iterator;
@@ -299,47 +316,60 @@ int do_dns_lookups(void)
 		i++;
 	}
 	if (params->domain)
-	{
-		logline(LOG_INFO, "    Using domain: %s", params->domain);
-	}
+		logline(LOG_INFO, "    Using domain      : %s", params->domain);
 	if (params->inputfile)
-	{
-		logline(LOG_INFO, "    Using input file: %s", params->inputfile);
-	}
+		logline(LOG_INFO, "    Using input file  : %s", params->inputfile);
 	if (params->outputfile)
+		logline(LOG_INFO, "    Using output file : %s", params->outputfile);
+	if (params->reverse)
+		logline(LOG_INFO, "    DNS lookup mode   : Reverse");
+	else
+		logline(LOG_INFO, "    DNS lookup mode   : Forward");
+
+	switch (params->loglevel)
 	{
-		logline(LOG_INFO, "    Using output file: %s", params->outputfile);
+		case 1: logline(LOG_INFO, "    Log Level         : Error"); break;
+		case 2: logline(LOG_INFO, "    Log Level         : Info"); break;
+		case 3: logline(LOG_INFO, "    Log Level         : Debug"); break;
+		default: logline(LOG_INFO, "    Log Level         : Error");
 	}
+
+	/* Check workitems prior to processing */
+	logline(LOG_INFO, "Checking input file...");
 	if (params->reverse)
 	{
-		logline(LOG_INFO, "    DNS lookup mode: Reverse");
+		/* File must contain a bunch of ip addresses */
+		
 	}
 	else
 	{
-		logline(LOG_INFO, "    DNS lookup mode: Forward");
-	}
-	switch (params->verbosity)
-	{
-		case 1: logline(LOG_INFO, "    Verbosity: Error"); break;
-		case 2: logline(LOG_INFO, "    Verbosity: Info"); break;
-		case 3: logline(LOG_INFO, "    Verbosity: Debug"); break;
-		default: logline(LOG_INFO, "    Verbosity: Error");
+		/* File must contain host names */
+		if (check_input_file_host() == 0)
+		{
+			logline(LOG_INFO, "Input file check successful. Data seems to be in required format.");		
+		}
+		else
+		{
+			logline(LOG_DEBUG, "There is a problem with the input file format. Aborting.");
+			return -1;
+		}
 	}
 
 	/* Load workitems into linked list */
-	logline(LOG_DEBUG, "Loading workitems...");
+	logline(LOG_INFO, "Processing starts now, stay tuned...");
+	logline(LOG_DEBUG, "    Loading workitems...");
 	load_workitems(params->inputfile, &wi_start, params->reverse);	
-	logline(LOG_DEBUG, "%d workitems loaded from file", count_workitems(wi_start));
+	logline(LOG_DEBUG, "    %d workitems loaded from file", count_workitems(wi_start));
 
 	/* Distribute workitems among threads */
-	logline(LOG_DEBUG, "Distributing workitems among threads...");
+	logline(LOG_DEBUG, "    Distributing workitems among threads...");
 	dist_workitems(&wi_start, &wi_t1, &wi_t2, &wi_t3, &wi_t4, &wi_t5);
-	logline(LOG_DEBUG, "Workitems distributed");
-	logline(LOG_DEBUG, "Thread 1 workitems: %d", count_workitems(wi_t1));
-	logline(LOG_DEBUG, "Thread 2 workitems: %d", count_workitems(wi_t2));
-	logline(LOG_DEBUG, "Thread 3 workitems: %d", count_workitems(wi_t3));
-	logline(LOG_DEBUG, "Thread 4 workitems: %d", count_workitems(wi_t4));
-	logline(LOG_DEBUG, "Thread 5 workitems: %d", count_workitems(wi_t5));
+	logline(LOG_DEBUG, "    Workitems distributed");
+	logline(LOG_DEBUG, "    Thread 1 workitems: %d", count_workitems(wi_t1));
+	logline(LOG_DEBUG, "    Thread 2 workitems: %d", count_workitems(wi_t2));
+	logline(LOG_DEBUG, "    Thread 3 workitems: %d", count_workitems(wi_t3));
+	logline(LOG_DEBUG, "    Thread 4 workitems: %d", count_workitems(wi_t4));
+	logline(LOG_DEBUG, "    Thread 5 workitems: %d", count_workitems(wi_t5));
 
 	/* Prepare data structures for threads */
 	t1_params.thread_id = 1;
@@ -374,52 +404,52 @@ int do_dns_lookups(void)
 
 	if (pthread_create(&t1,	NULL, proc_workitems, &t1_params))
 	{
-		logline(LOG_ERROR, "Could not create thread 1");
+		logline(LOG_ERROR, "    Could not create thread 1");
 		return -1;
 	}
 	else
 	{
-		logline(LOG_DEBUG, "Thread 1 created");
+		logline(LOG_DEBUG, "    Thread 1 created");
 	}
 
 	if (pthread_create(&t2,	NULL, proc_workitems, &t2_params))
 	{
-		logline(LOG_ERROR, "Could not create thread 2");
+		logline(LOG_ERROR, "    Could not create thread 2");
 		return -1;
 	}
 	else
 	{
-		logline(LOG_DEBUG, "Thread 2 created");
+		logline(LOG_DEBUG, "    Thread 2 created");
 	}
 
 	if (pthread_create(&t3,	NULL, proc_workitems, &t3_params))
 	{
-		logline(LOG_ERROR, "Could not create thread 3");
+		logline(LOG_ERROR, "    Could not create thread 3");
 		return -1;
 	}
 	else
 	{
-		logline(LOG_DEBUG, "Thread 3 created");
+		logline(LOG_DEBUG, "    Thread 3 created");
 	}
 
 	if (pthread_create(&t4,	NULL, proc_workitems, &t4_params))
 	{
-		logline(LOG_ERROR, "Could not create thread 4");
+		logline(LOG_ERROR, "    Could not create thread 4");
 		return -1;
 	}
 	else
 	{
-		logline(LOG_DEBUG, "Thread 4 created");
+		logline(LOG_DEBUG, "    Thread 4 created");
 	}
 
 	if (pthread_create(&t5,	NULL, proc_workitems, &t5_params))
 	{
-		logline(LOG_ERROR, "Could not create thread 5");
+		logline(LOG_ERROR, "    Could not create thread 5");
 		return -1;
 	}
 	else
 	{
-		logline(LOG_DEBUG, "Thread 5 created");
+		logline(LOG_DEBUG, "    Thread 5 created");
 	}
 
 	/* Wait for threads to finish */
@@ -432,52 +462,52 @@ int do_dns_lookups(void)
 	/* Extract results out of threads */
 	if ((int *)t1_status < 0)
 	{
-		logline(LOG_ERROR, "Thread 1 had an error condition");
+		logline(LOG_ERROR, "    Thread 1 had an error condition");
 	}
 	else
 	{
 		/* Extract results from thread 1 */
-		logline(LOG_DEBUG, "Thread 1 finished successfully");
+		logline(LOG_DEBUG, "    Thread 1 finished successfully");
 	}
 
 	if ((int *)t2_status < 0)
 	{
-		logline(LOG_ERROR, "Thread 2 had an error condition");
+		logline(LOG_ERROR, "    Thread 2 had an error condition");
 	}
 	else
 	{
 		/* Extract results from thread 2 */
-		logline(LOG_DEBUG, "Thread 2 finished successfully");
+		logline(LOG_DEBUG, "    Thread 2 finished successfully");
 	}
 
 	if ((int *)t3_status < 0)
 	{
-		logline(LOG_ERROR, "Thread 3 had an error condition");
+		logline(LOG_ERROR, "    Thread 3 had an error condition");
 	}
 	else
 	{
 		/* Extract results from thread 3 */
-		logline(LOG_DEBUG, "Thread 3 finished successfully");
+		logline(LOG_DEBUG, "    Thread 3 finished successfully");
 	}
 
 	if ((int *)t4_status < 0)
 	{
-		logline(LOG_ERROR, "Thread 4 had an error condition");
+		logline(LOG_ERROR, "    Thread 4 had an error condition");
 	}
 	else
 	{
 		/* Extract results from thread 4 */
-		logline(LOG_DEBUG, "Thread 4 finished successfully");
+		logline(LOG_DEBUG, "    Thread 4 finished successfully");
 	}
 
 	if ((int *)t5_status < 0)
 	{
-		logline(LOG_ERROR, "Thread 5 had an error condition");
+		logline(LOG_ERROR, "    Thread 5 had an error condition");
 	}
 	else
 	{
 		/* Extract results from thread 5 */
-		logline(LOG_DEBUG, "Thread 5 finished successfully");
+		logline(LOG_DEBUG, "    Thread 5 finished successfully");
 	}
 
 	/* Consolidate results */
@@ -551,17 +581,99 @@ int do_dns_lookups(void)
 		list_iterator->next = t5_params.result_list;
 	}
 
+	logline(LOG_INFO, "Finished processing data.");
+	logline(LOG_INFO, "The following hosts have been identified:");
+
 	/* Print results on screen */
 	list_iterator = result_all;
 	while (list_iterator)
 	{
-		logline(LOG_INFO, "Host: %s, IP: %s", list_iterator->host, list_iterator->ip);
+		hostcount++;
+		logline(LOG_INFO, "    Host: %s, IP: %s", list_iterator->host, list_iterator->ip);
 		list_iterator = list_iterator->next;
 	}
-
+	if (hostcount == 0)
+	{
+		logline(LOG_INFO, "    Unfortunately, no hosts have been found. Try again using different settings.");
+	} 
+	else
+	{	
+		logline(LOG_INFO, "    %d hosts found.", hostcount);
+	}
+	
+	
 	/* Export results to text file */
-	list_iterator = result_all;
-	write_results(list_iterator);
+	if ((params->outputfile != NULL) && (hostcount > 0))
+	{
+		logline(LOG_INFO, "Exporting data to %s...", params->outputfile);
+		list_iterator = result_all;
+		write_results(list_iterator);
+		logline(LOG_INFO, "Export finished.");
+	}
+
+	logline(LOG_INFO, "Thank you for flying with us!");
+}
+
+/*
+ * Checks the input file if it contains valid hostnames.
+ */
+int check_input_file_host(void)
+{
+	int error = 0;
+	FILE *f;
+	int ret = 0;
+	regex_t regex_host;
+	char line[256];
+
+	/* Compile regex pattern */
+	if ((ret = regcomp(&regex_host, "^[0-9a-z]{3,100}$", REG_EXTENDED)) != 0)
+	{
+		return -1;    
+	}
+
+	/* Check if every line in the input file is a valid host */
+	f = fopen(params->inputfile, "r");
+	if (f != NULL)
+	{
+		while ((fgets(line, 255, f) != NULL) && (error == 0))
+		{
+			chomp(line);
+			ret = regexec(&regex_host, line, 0, NULL, 0);
+			if (ret == 0)
+			{
+				logline(LOG_DEBUG, "    Work item %s is valid", line);
+			}
+			else if (ret == REG_NOMATCH)
+			{
+				logline(LOG_DEBUG, "    Work item %s has an invalid format", line);
+				error = 1;
+			}
+			else
+			{
+				logline(LOG_DEBUG, "    Work item %s has an unknown problem. Return code was: %d", line, ret);
+				error = 1;
+			}	
+		}
+	
+		regfree(&regex_host);
+		fclose(f);
+		
+		if (error == 1)
+		{
+			return -1;
+		}
+	}
+	
+	return 0;
+}
+
+/*
+ * Checks the input file if it contains valid ip addresses.
+ */
+int check_input_file_ip(void)
+{
+
+
 }
 
 
@@ -660,7 +772,7 @@ void dist_workitems(workitem **wi_list, workitem **wi_t1, workitem **wi_t2,
 		/* Choose tray */
 		tray = count % max_trays;
 
-		logline(LOG_DEBUG, "Assigning work item %s to thread %d", (*wi_list)->wi, tray);
+		logline(LOG_DEBUG, "    Assigning work item %s to thread %d", (*wi_list)->wi, tray);
 
 		switch (tray)
 		{
@@ -784,18 +896,18 @@ void *proc_workitems(void *arg)
 
 	wi_list = t_params->wi_list;
 
-	logline(LOG_DEBUG, "Thread %d: Input params: reverse = %d, server = %s", t_params->thread_id, t_params->reverse, t_params->server);   
+	logline(LOG_DEBUG, "    Thread %d: Input params: reverse = %d, server = %s", t_params->thread_id, t_params->reverse, t_params->server);   
 
 	while (wi_list)
 	{
-		logline(LOG_DEBUG, "Thread %d: Processing workitem %s", t_params->thread_id, wi_list->wi);
+		logline(LOG_DEBUG, "    Thread %d: Processing workitem %s", t_params->thread_id, wi_list->wi);
 		if (t_params->reverse)
 		{
-			do_reverse_dns_lookup(params->servers[0], wi_list->wi, &(t_params->result_list));
+			do_reverse_dns_lookup(t_params->server, wi_list->wi, &(t_params->result_list));
 		}
 		else
 		{
-			do_forward_dns_lookup(params->servers[0], wi_list->wi, t_params->result_list);
+			do_forward_dns_lookup(t_params->server, wi_list->wi, &(t_params->result_list));
 		}
 
 		wi_list = wi_list->next;
@@ -806,43 +918,69 @@ void *proc_workitems(void *arg)
 /*
  * Perform a forward DNS lookup
  */
-void do_forward_dns_lookup(char *server, char *host, result *result_list)
+void do_forward_dns_lookup(char *server, char *host, result **result_list)
 {
-	result *result_list_entry = NULL;
-	result *result_list_start = NULL;
-	int found = 0;
-	int first = 1;
+	result *list_orig_startaddr = *result_list;
+	result *list_head = NULL;
+	result *list_entry = NULL;
+	result *list_start = NULL;
 	int i;
 	char *ip_addr[20];
 
-	/* Save start point of linked list */
-	result_list_start = result_list;
-
 	/* Initialize array of ip adresses */
-	for (i = 0; i < 20; i++) { ip_addr[i] = '\0'; }
+	for (i = 0; i < 20; i++) { ip_addr[i] = NULL; }
 
 	dns_query_a_record(server, host, ip_addr);
 
-	/* Go to last entry in result_list */
-	while (result_list)
-	{
-		result_list = result_list->next;
-	}
-
-	/* List ip addresses */
+	/* Add found ips to a local linked list */
 	for (i = 0; i < 20; i++)
 	{
-		if (ip_addr[i] != '\0')
+		/* Exit loop as soon as an empty entry appears */
+		if (ip_addr[i] == NULL) { break; }
+
+		/* Add new entry to list */
+		list_entry = (result *)malloc(sizeof(result));
+		list_entry->host = (char *)malloc(strlen(host));
+		list_entry->ip = (char *)malloc(strlen(ip_addr[i]));
+		strcpy(list_entry->host, host);
+		strcpy(list_entry->ip, ip_addr[i]);
+		list_entry->next = NULL;
+		if (list_head == NULL)
 		{
-			/* Add new entry to list */
-			result_list_entry = (result *)malloc(sizeof(result));
-			result_list_entry->host = host;
-			result_list_entry->ip = ip_addr[i];
-			result_list->next = result_list_entry;
+			list_head = list_entry;
+			list_start = list_head;
+		}
+		else
+		{
+			list_head->next = list_entry;
+			list_head = list_head->next;
+		}
+
+		/* Attach local linked list to existing list of results */
+		if (*result_list == NULL)
+		{
+			/* This is the first entry in the list, therefore it is ok
+			 * that this remains the start address of the list
+			 */
+			*result_list = list_start;
+		}
+		else
+		{
+			/* Iterate through end of list and attach */
+			while ((*result_list)->next)
+			{
+				*result_list = (*result_list)->next;
+			}
+
+			/* Attach newly generated linked list to the end of
+			 * master linked list
+			 */
+			(*result_list)->next = list_start;
+
+			/* Restore beginning of list pointer */
+			*result_list = list_orig_startaddr;
 		}
 	}
-	/* Set correct pointer to start of linked list */
-	result_list = result_list_start;
 }
 
 
@@ -859,14 +997,14 @@ void do_reverse_dns_lookup(char *server, char *ip, result **result_list)
 	char *domains[20];
 
 	/* Initialize array of domains */
-	for (i = 0; i < 20; i++) { domains[i] = '\0'; }
+	for (i = 0; i < 20; i++) { domains[i] = NULL; }
 
 	dns_query_ptr_record(server, ip, domains);
 
 	/* Add found domains to a local linked list */
 	for (i = 0; i < 20; i++)
 	{
-		/* exit loop as soon as an empty entry appears */
+		/* Exit loop as soon as an empty entry appears */
 		if (domains[i] == NULL) { break; }
 
 		/* Add new entry to list */	
@@ -957,33 +1095,65 @@ void chomp(char *s) {
 }
 
 
-/* Display a helpful page */
+/* 
+ * Display a helpful page.
+ */
 void display_help_page(void)
 {
 	show_gnu_banner();
-	printf("\n\n");
-	printf("Syntax:\n\n");
-	printf("%s [options]\n", APP_NAME);
-	printf("\n\n");
-	printf("Parameters\n\n");
-	printf("--reverse, -r\n");
 	printf("\n");
-	printf("    Do a reverse DNS lookup. If not specified, a forward DNS lookup will be performed.\n");
+	printf("Syntax:\n");
+	printf("-------\n");
+	printf("To perform forward DNS lookups the -i parameter must be specified. When reverse\n");
+	printf("DNS lookups shall be performed, the -r parameter must be specified additionally.\n\n");
+	printf("Forward DNS Lookups:     %s [OPTIONS] -i <file>\n", APP_NAME);
+	printf("Reverse DNS lookups:     %s [OPTIONS] -r -i <file>\n", APP_NAME);
 	printf("\n");
-	printf("--server=<ip1,ip2,...>, -s <ip1,ip2,...>\n");
+	printf("Parameters:\n");
+	printf("-----------\n");
+	printf("%s currently supports the following parameters:\n\n", APP_NAME);
+	printf("--reverse, -r                              Do a reverse DNS lookup. If not\n");
+	printf("                                           specified, a forward DNS lookup will\n");
+	printf("                                           be performed\n");
+	printf("--server=<ip1,ip2,...>, -s <ip1,ip2,...>   IP of DNS server to query.\n");
+	printf("--domain=<mydomain>, -d <mydomain>         Domain to query. Only used when doing\n");
+	printf("                                           forward DNS lookups.\n");
+	printf("--inputfile=<inputfile>, -i <inputfile>    File containining hostnames or IP\n");
+	printf("                                           addresses, depending\n");
+	printf("                                           on query mode (forward, reverse)\n");
+	printf("--outputfile=<outputfile>, -o <outputfile> Saves the result to a text file.\n");
+	printf("--loglevel=<level>, -l <level>             Specifies the desired log level.\n");
+	printf("                                             1 = ERROR (Log errors only)\n");
+	printf("                                             2 = INFO (Log additional infos)\n");
+	printf("                                             3 = DEBUG (Log debug level info)\n");
+	printf("--help, -h                                 Displays this help page.\n");
+	printf("--version, -v                              Displays version information.\n");
 	printf("\n");
-	printf("    IP of DNS server to query.\n");
-	printf("\n");
-	printf("--domain=<mydomain>, -d <mydomain>\n");
-	printf("\n");
-	printf("    Domain to query. Only used when doing forward DNS lookups.\n");
-	printf("\n");
-	printf("--inputfile=<inputfile>, -i <inputfile>\n");
-	printf("\n");
-	printf("    File containining hostnames or IP addresses, depending on query mode (forward, reverse\n");
-	printf("\n\n");
+    printf("Bug Reports and Other Comments:\n");
+    printf("-------------------------------\n");
+    printf("I'm glad to receive comments and bug reports on this tool. You can best reach me\n");
+    printf("by email or over GitHub:\n\n");
+    printf("E-Mail:     andre.gasser@gmx.ch\n");
+    printf("GitHub:     XXXXXXXX\n\n");
 }
 
+
+/* 
+ * Display version information.
+ */
+void display_version_info(void)
+{
+	printf("%s %s\n", APP_NAME, APP_VERSION);
+	printf("Copyright (C) 2012 André Gasser\n");
+	printf("License GPLv3: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>\n");
+	printf("This is free software: you are free to change and redistribute it.\n");
+	printf("There is NO WARRANTY, to the extent permitted by law.\n");
+}
+
+
+/*
+ * Display a short GNU banner.
+ */
 void show_gnu_banner(void)
 {
 	printf("%s %s  Copyright (C) 2012  André Gasser\n", APP_NAME, APP_VERSION);

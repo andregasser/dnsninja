@@ -1,10 +1,10 @@
-                               ==DNSMAP==
+                               ==DNSNINJA==
 
                         Version 0.1 / 26.03.2012
 
 --=[ Disclaimer ]=-----------------------------------------------------//
 
-This document describes DNSMAP, a tool to perform dictionary based
+This document describes DNSNINJA, a tool to perform dictionary based
 queries against DNS servers. The author of this document provides the
 software AS IS and and cannot be made responsible for any damage that
 may occur while using this tool.
@@ -22,18 +22,18 @@ modify and distribute it.
 
 1 - Introduction
 
-2 - The tool
+2 - The Tool
   2.1 - Overview
   2.2 - Features
   2.3 - Usage
-	2.3.1 - Command-line arguments
-    2.3.2 - Doing forward DNS lookups
-    2.3.3 - Doing reverse DNS lookups
-    2.3.4 - Saving results to a file
+	2.3.1 - Command-line Arguments
+    2.3.2 - Doing Forward DNS Lookups
+    2.3.3 - Doing Reverse DNS Lookups
+    2.3.4 - Saving Results to a File
   2.4 - How to get it
-  2.5 - Building from source
+  2.5 - Building from Source
   2.6 - License
-  2.7 - Similar tools
+  2.7 - Similar Tools
 
 3 - Bibliography
 
@@ -46,17 +46,17 @@ modify and distribute it.
 
 
 
---[ 2 - The tool ]------------------------------------------------------
+--[ 2 - The Tool ]------------------------------------------------------
 
 ----[ 2.1 - Overview ]--------------------------------------------------
 
-DNSMAP is a tool to query DNS servers by using prepared wordlists.
+DNSNINJA is a tool to query DNS servers by using prepared wordlists.
 People usually use a tool like this, if the are not the owner of the
 DNS server and therefore do not have access to the zone data on the 
 server. Nevertheless, they want to enumerate / discover hosts located in
 a certain zone.
 
-By using DNSMAP, they get the possibility to do forward DNS lookups by
+By using DNSNINJA, they get the possibility to do forward DNS lookups by
 providing a list of hostnames. But they can also do reverse DNS lookups
 (aka inverse DNS lookups) to identify domain names based on ip
 addresses.
@@ -71,7 +71,7 @@ You have been warned.
 
 ----[ 2.2 - Features ]--------------------------------------------------
 
-the current version of DNSMAP offers the following features:
+the current version of DNSNINJA offers the following features:
 
   + Do forward DNS lookups based on wordlist
   + Do reverse DNS lookups based on a list of ip addresses
@@ -82,7 +82,7 @@ the current version of DNSMAP offers the following features:
 
 ----[ 2.3 - Usage ]-----------------------------------------------------
 
-----[ 2.3.1 - Command-line arguments ]----------------------------------
+----[ 2.3.1 - Command-line Arguments ]----------------------------------
 
 The following command-line arguments are supported:
 
@@ -123,12 +123,12 @@ The following command-line arguments are supported:
     Display help page.
 
 
-----[ 2.3.2 - Doing forward DNS lookups ]-------------------------------
+----[ 2.3.2 - Doing Forward DNS Lookups ]-------------------------------
 
 Usage of this tool is quite simple. Do do a simple forward DNS lookup
 search based on a wordlist, run the following command:
 
-$ ./dnsmap -s 111.222.333.444 -d mydomain.com -i myhosts.txt
+$ ./dnsninja -s 111.222.333.444 -d mydomain.com -i myhosts.txt
 
 This connects to the DNS server 111.222.333.444 and sends queries for the
 mydomain.com domain. It uses the file myhosts.txt which contains entries like
@@ -154,19 +154,19 @@ backup.mydomain.com
 If a host has been found, the ip address of this host is returned.
 
 
-----[ 2.3.3 - Doing reverse DNS lookups ]-------------------------------
+----[ 2.3.3 - Doing Reverse DNS Lookups ]-------------------------------
 
 Doing reverse DNS lookups works similar. To do reverse DNS lookups based
 on a list of ip addresses, run the following command:
 
-$ ./dnsmap -r -s 111.222.333.444 -i myips.txt
+$ ./dnsninja -r -s 111.222.333.444 -i myips.txt
 
 Again, the DNS server 111.222.333.444 is contacted to DNS PTR queries will
 be sent to this machine. As a result, you will receive the name of the 
 domains associated with that ip. 
 
 
-----[ 2.3.4 - Saving output to a file ]---------------------------------
+----[ 2.3.4 - Saving Output to a File ]---------------------------------
 
 
 
@@ -178,42 +178,57 @@ You'll always find the latest version of this tool on GitHub.
 blabla...
 
 
-----[ 2.5 - Building from source ]--------------------------------------
+----[ 2.5 - Building from Source ]--------------------------------------
 
-The source distribution can be built from source by invoking the
-following commands on your box:
+Befor you can build the tool from source, your system must meet some
+preconditions. Currently they are:
 
-$ gunzip dnsmap-<version>.tar.gz
-$ tar xvf dnsmap-<version>.tar
+  + gcc must be installed.
+  + make must be installed.
 
-Then switch into the newly created directory and compile it using:
+The source distribution can be built from source by conducting the
+following steps on your box:
 
-$ make
+  1. Copy the file dnsninja-<version>.tar.gz to your linux box. Make
+     sure, it is located in a dedicated directory, since extraction
+	 will put the files directly in there.
 
-Optionally, you can compile it in debug mode using:
+  2. Extract the tarball using:
 
-$ make DEBUG=1
+     $ tar xvf dnsninja-<version>.tar.gz
+
+  3. Compile the source code using:
+
+     $ make
+
+	 Optionally, you can compile it in debug mode in order to add debug
+	 information to the resulting binary. You'll need that only if you
+	 like to debug using gdb. To create a debug binary invoke:
+
+     $ make DEBUG=1
+
+The resulting binary is now ready to use.
 
 
 ----[ 2.6 - License ]---------------------------------------------------
 
 Copyright 2012 André Gasser
 
-Dnsmap is free software: you can redistribute it and/or modify
+Dnsninja is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
-Dnsmap is distributed in the hope that it will be useful,
+Dnsninja is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with Dnsmap.  If not, see <http://www.gnu.org/licenses/>.
+along with Dnsninja.  If not, see <http://www.gnu.org/licenses/>.
 
 
-----[ 2.7 - Similar tools ]---------------------------------------------
+----[ 2.7 - Similar Tools ]---------------------------------------------
 
 This tool was partly inspired by other tools like this. These are:
 

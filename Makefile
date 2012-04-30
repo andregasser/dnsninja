@@ -1,9 +1,9 @@
-.PHONY : log.o dns.o dnsmap.o dnsmap 
+.PHONY : log.o dns.o dnsninja.o dnsninja 
 
 # Set compiler to use
 CC=gcc
 CFLAGS=
-DEBUG=0
+DEBUG=1
 
 ifeq ($(DEBUG),1)
 	CFLAGS+=-g
@@ -11,11 +11,11 @@ else
 	CFLAGS+=-O2
 endif
 
-dnsmap : log.o dns.o dnsmap.o
-	$(CC) $(CFLAGS) -o dnsmap log.o dns.o dnsmap.o -lpthread
+dnsninja : log.o dns.o dnsninja.o
+	$(CC) $(CFLAGS) -o dnsninja log.o dns.o dnsninja.o -lpthread
 
-dnsmap.o : log.o
-	$(CC) $(CFLAGS) -c dnsmap.c -o dnsmap.o
+dnsninja.o : log.o
+	$(CC) $(CFLAGS) -c dnsninja.c -o dnsninja.o
 
 dns.o : 
 	$(CC) $(CFLAGS) -c dns.c -o dns.o 
@@ -24,6 +24,6 @@ log.o :
 	$(CC) $(CFLAGS) -c log.c -o log.o
 
 clean : 
-	rm -f dnsmap
+	rm -f dnsninja
 	rm -f *.o
 	rm -f *~
