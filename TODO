@@ -1,30 +1,73 @@
-TODO's
-------
-- Let the user choose how many threads to use (-t x, --threads=x)
-- Add additional request throttling parameter (stealth mode) (-????)
-- Integrate pre-made and huge wordlist (john the ripper, ...)
-- Add opportunity to specify ranges of ips (hyphen notation)
-    - 160.40.100.0/24
-    - 160.40.5.1-160.40.5.255
-- Create install target in makefile
-- Improve memory allocation code (malloc()/free())
-- Improve linked list handling
-- Create MAN page
-- IPv6 support
-    - Query DNS server by using its IPv6 address
-    - Query AAAA record 
-- Pipe support
+                               ==DNSNINJA==
 
-Inputs aus GNU Coding Standards:
-- Jeder Call auf malloc() soll auf Erfolg geprüft werden.
-- Der Fehler eines fehlgeschlagenen System Calls soll mit perror angezeigt werden.
+                        Version 0.1 / 30.04.2012
+
+--=[ Introduction ]=---------------------------------------------------//
+
+This is the list of open issues, ideas and so forth which I have 
+collected over time. 
+
+
+--[ To Do's ]------------------------------------------------------------
+
++ Add IPv6 Support
+
+  It shall be able to query DNS servers listening on IPv6 addresses. It 
+  shall also be possible to query DNS servers for AAAA resource records.
+
+
++ Support CIDR notation an IP ranges
+
+  When conducting reverse dns lookups it is easier to specify ip ranges
+  by using CIDR notation or using the hyphen (-) character such as:
+    160.40.100.0/24
+    160.40.5.1-160.40.5.255
     
-- Parameter --help hinzufügen mit Text am Schluss:
-    Report bugs to: mailing-address
-    DNSRAT home page: <http://www.gnu.org/software/pkg/>
-    General help using GNU software: <http://www.gnu.org/gethelp/>
+  This makes files much shorter (you can write 160.40.100.0/24 instead of
+  listing each ip address individually.
+  
 
-- Parameter --verbose hinzufügen
++ Better Thread Configuration
 
-- Speicheranalyse mit valgrind durchführen
+  The user shall be able to specify the number of threads to use.
+  Possible parameter: --threads=x, -t x
+
+    
++ Request Throttling Parameter
+
+  The use shall have the possibility to throttle DNS requests. This
+  avoids high traffic on dns servers in a short time. 
+
+  
++ Integrate Pre-made Word List
+
+  A ready-to-use word list shall be provided to enable the user to
+  quickly use the tool without generating word lists on its own.
+  
+
++ Create Install Target in Makefile
+
+  This makes installation easier.
+
+
++ Improve Memory Allocation / Memory Management Code
+
+  Especially malloc() and (free) usage shall be improved. Check memory 
+  usage with valgrind.
+  
+  
++ Improve Linked List Handling
+
+  This can be done better for sure.
+  
+  
++ Create MAN Page
+
+  This is required too.
+  
+  
++ Pipe Support
+
+  Support pipe operator. 
+
 

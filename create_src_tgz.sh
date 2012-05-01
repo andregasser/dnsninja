@@ -1,4 +1,4 @@
 #! /bin/sh
 
-tar --create --file=dnsmap.tar dnsmap.c dns.c dns.h log.c log.h Makefile COPYING README iplist.txt hostlist.txt TODO
-gzip dnsmap.tar
+tar --create --file=dnsninja-0.1.tar dnsninja.c dns.c dns.h log.c log.h Makefile COPYING README iplist-example.txt hostlist-example.txt TODO
+gzip dnsninja-0.1.tar

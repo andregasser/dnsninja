@@ -1,6 +1,6 @@
                                ==DNSNINJA==
 
-                        Version 0.1 / 26.03.2012
+                        Version 0.1 / 30.04.2012
 
 --=[ Disclaimer ]=-----------------------------------------------------//
 
@@ -13,9 +13,7 @@ This software may contain errors or may not work properly in certain
 circumstances. Therefore, use this tool at your own risk. 
 
 You can use this tool free of charge and you are allowed to freely
-modify and distribute it.
-
-
+modify and distribute it. Please check section 2.6 for more details.
 
 
 --[ Contents ]----------------------------------------------------------
@@ -30,10 +28,11 @@ modify and distribute it.
     2.3.2 - Doing Forward DNS Lookups
     2.3.3 - Doing Reverse DNS Lookups
     2.3.4 - Saving Results to a File
-  2.4 - How to get it
-  2.5 - Building from Source
-  2.6 - License
+  2.4 - Building from Source
+  2.5 - License
+  2.6 - Source Code Repository
   2.7 - Similar Tools
+  2.8 - Reporting Bugs and Features
 
 3 - Bibliography
 
@@ -43,7 +42,14 @@ modify and distribute it.
 
 
 --[ 1 - Introduction ]--------------------------------------------------
-
+DNS servers are an important source of information during information
+gathering in a penetration testing project. Attackers / penetration
+testers use data in DNS servers to obtain knowledge about live systems.
+DNS servers become even more important in the IPv6 world, where simple
+subnet scanning won't be possible anymore due to the huge address space
+provided.
+This tool shall support penetration testers during their information 
+gathering activities and reduce the need for manual, repetitive tasks.
 
 
 --[ 2 - The Tool ]------------------------------------------------------
@@ -51,7 +57,7 @@ modify and distribute it.
 ----[ 2.1 - Overview ]--------------------------------------------------
 
 DNSNINJA is a tool to query DNS servers by using prepared wordlists.
-People usually use a tool like this, if the are not the owner of the
+People usually use a tool like this, if they are not the owner of the
 DNS server and therefore do not have access to the zone data on the 
 server. Nevertheless, they want to enumerate / discover hosts located in
 a certain zone.
@@ -63,8 +69,8 @@ addresses.
 
 A tool like this can generate heavy load on the target. It is therefore
 adviced to take caution. System administrators at the target's site
-could interpret such scans as some kind of attack and take counter-
-measures.
+could interpret such scans as a certain type of attack and take counter-
+measures. Therefore, use with caution.
 
 You have been warned.
 
@@ -73,14 +79,18 @@ You have been warned.
 
 the current version of DNSNINJA offers the following features:
 
+  + Supports multi-threading
   + Do forward DNS lookups based on wordlist
   + Do reverse DNS lookups based on a list of ip addresses
   + Query up to five DNS servers in parallel to distribute the load
   + Save the results to a text file
-  + Supports different verbosity levels for output
+  + Supports different log levels
   
 
 ----[ 2.3 - Usage ]-----------------------------------------------------
+
+This chapter explains basic usage of DNSNINJA.
+
 
 ----[ 2.3.1 - Command-line Arguments ]----------------------------------
 
@@ -88,7 +98,7 @@ The following command-line arguments are supported:
 
 --reverse, -r                   
 
-    Do reverse DNS lookups. If not specified, a forward DNS lookup will
+    Do a reverse DNS lookup. If not specified, a forward DNS lookup will
     be performed.
 
 --servers=<ip1,ip2,...>, -s <ip1,ip2,...>
@@ -97,26 +107,30 @@ The following command-line arguments are supported:
 
 --domain=<domain name>, -d <domain name>
 
-    When doing forward DNS lookups, the top- and second-level-domain can 
-    be specified here (e.g. foo.org).
+    Specify the domain to be queried. Only used when doing forward 
+    DNS lookups (e.g. -d foo.org).
 
 --inputfile=<filename>, -i <filename>      
 
-    The file containing either a list of ip-addresses or host names, 
+    The file containing either a list of ip addresses or host names, 
     depending on the lookup mode (reverse, forward).
                                 
 --outputfile=<filename>, -o <filename>     
 
     Allows you to write the query results into a simple, comma-separated
-    CSV-file. This allows you to further process the results in other 
+    text file. This allows you to further process the results in other 
     tools.
                                 
---verbosity=<level>, -v <level>         
+--loglevel=<level>, -l <level>         
 
-    Specify verbosity level. The following levels are allowed:
-        1 = Errors only
-        2 = Informational output
-        3 = Debug Output
+    Specifies the desired log level. The following levels are supported:
+        1 = ERROR (Log errors only)
+        2 = INFO (Log additional information)
+        3 = DEBUG (Log debug level information)
+
+--version, -v
+
+    Displays version information.
 
 --help, -h 
 
@@ -168,17 +182,15 @@ domains associated with that ip.
 
 ----[ 2.3.4 - Saving Output to a File ]---------------------------------
 
+DNSNINJA displays the results on screen. But sometimes it is desirable
+to save the results to a text file. You can do this by specifying the
+-o option on the command line like this:
+
+$ ./dnsninja -s 111.222.333.444 -d mydomain.com 
+    -i myhosts.txt -o results.txt
 
 
-
-----[ 2.4 - How to get it ]---------------------------------------------
-
-You'll always find the latest version of this tool on GitHub.
-
-blabla...
-
-
-----[ 2.5 - Building from Source ]--------------------------------------
+----[ 2.4 - Building from Source ]--------------------------------------
 
 Befor you can build the tool from source, your system must meet some
 preconditions. Currently they are:
@@ -209,8 +221,15 @@ following steps on your box:
 
 The resulting binary is now ready to use.
 
+As for now, I've tested the binary on the following platforms and it
+just runs fine:
 
-----[ 2.6 - License ]---------------------------------------------------
++ Arch Linux
++ Debian 6 Squeeze
++ Cygwin 
+
+
+----[ 2.5 - License ]---------------------------------------------------
 
 Copyright 2012 André Gasser
 
@@ -228,6 +247,13 @@ You should have received a copy of the GNU General Public License
 along with Dnsninja.  If not, see <http://www.gnu.org/licenses/>.
 
 
+----[ 2.6 - Source Code Repository ]------------------------------------
+
+The latest version of the tool is always available here:
+
++ https://github.com/shoka/dnsninja
+
+
 ----[ 2.7 - Similar Tools ]---------------------------------------------
 
 This tool was partly inspired by other tools like this. These are:
@@ -237,6 +263,14 @@ This tool was partly inspired by other tools like this. These are:
 
 + dns-discovery by m0nad
   (http://code.google.com/p/dns-discovery)
+
+
+----[ 2.8 - Reporting Bugs and Features ]-------------------------------
+
+This software is probably far away from a bug-free state. Because of
+this, I am very glad to receive feedback from you regarding DNSNINJA.
+You can either contact me by mail or, even better, open a new issue on
+github.com.
 
 
 ----[ 3 - Bibliography ]------------------------------------------------
@@ -253,5 +287,6 @@ This tool was partly inspired by other tools like this. These are:
 ----[ 4 - Contact ]-----------------------------------------------------
 
 Mail:      andre.gasser@gmx.ch
+Blog:      blog.andregasser.net
 Jabber:    sh0ka@jabber.ccc.de
 
