@@ -13,7 +13,8 @@ This software may contain errors or may not work properly in certain
 circumstances. Therefore, use this tool at your own risk. 
 
 You can use this tool free of charge and you are allowed to freely
-modify and distribute it. Please check section 2.6 for more details.
+modify and distribute it. Please check section "License" for more
+details.
 
 
 --[ Contents ]----------------------------------------------------------
@@ -40,6 +41,7 @@ modify and distribute it. Please check section 2.6 for more details.
 
 
 --[ 1 - Introduction ]--------------------------------------------------
+
 DNS servers are an important source of information during information
 gathering in a penetration testing project. Attackers / penetration
 testers use data in DNS servers to obtain knowledge about live systems.
@@ -54,16 +56,12 @@ gathering activities and reduce the need for manual, repetitive tasks.
 
 ----[ 2.1 - Overview ]--------------------------------------------------
 
-DNSNINJA is a tool to query DNS servers by using prepared wordlists.
-People usually use a tool like this, if they are not the owner of the
-DNS server and therefore do not have access to the zone data on the 
-server. Nevertheless, they want to enumerate / discover hosts located in
-a certain zone.
-
-By using DNSNINJA, they get the possibility to do forward DNS lookups by
-providing a list of hostnames. But they can also do reverse DNS lookups
-(aka inverse DNS lookups) to identify domain names based on ip
-addresses.
+DNSNINJA is a tool to query DNS servers by either using a prepared word
+list to send forward DNS lookup queries or a list of ip addresses to
+send reverse DNS lookup queries. It allows the user to quickly enumerate
+hosts in a DNS domain or an ip range. The tool is mainly aimed at 
+pentesters and shall provide support in their daily job during 
+information gathering. 
 
 A tool like this can generate heavy load on the target. It is therefore
 adviced to take caution. System administrators at the target's site
@@ -231,18 +229,18 @@ just runs fine:
 
 Copyright 2012 André Gasser
 
-Dnsninja is free software: you can redistribute it and/or modify
+DNSNINJA is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
-Dnsninja is distributed in the hope that it will be useful,
+DNSNINJA is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with Dnsninja.  If not, see <http://www.gnu.org/licenses/>.
+along with DNSNINJA.  If not, see <http://www.gnu.org/licenses/>.
 
 
 ----[ 2.6 - Source Code Repository ]------------------------------------
@@ -286,6 +284,7 @@ github.com.
 ----[ 4 - Contact ]-----------------------------------------------------
 
 Mail:      andre.gasser@gmx.ch
-Blog:      blog.andregasser.net
 Jabber:    sh0ka@jabber.ccc.de
+Blog:      http://blog.andregasser.net
+
 
