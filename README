@@ -39,8 +39,6 @@ modify and distribute it. Please check section 2.6 for more details.
 4 - Contact
 
 
-
-
 --[ 1 - Introduction ]--------------------------------------------------
 DNS servers are an important source of information during information
 gathering in a penetration testing project. Attackers / penetration
@@ -284,6 +282,7 @@ github.com.
 [3] RFC 1035 - Domain Implementation and Specification
     http://www.ietf.org/rfc/rfc1035.txt
     
+
 ----[ 4 - Contact ]-----------------------------------------------------
 
 Mail:      andre.gasser@gmx.ch
