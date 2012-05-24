@@ -291,6 +291,7 @@ int parse_server_cmd_arg(char *optarg, char *servers[])
 int do_dns_lookups(void)
 {
 	int i = 0;
+	int ret = 0;
 	int hostcount = 0;
 	thread_params t1_params, t2_params, t3_params, t4_params, t5_params;
 	void *t1_status, *t2_status, *t3_status, *t4_status, *t5_status;
@@ -339,22 +340,24 @@ int do_dns_lookups(void)
 	if (params->reverse)
 	{
 		/* File must contain a bunch of ip addresses */
-		
+		ret = check_input_file_ip();
 	}
 	else
 	{
 		/* File must contain host names */
-		if (check_input_file_host() == 0)
-		{
-			logline(LOG_INFO, "Input file check successful. Data seems to be in required format.");		
-		}
-		else
-		{
-			logline(LOG_DEBUG, "There is a problem with the input file format. Aborting.");
-			return -1;
-		}
+		ret = check_input_file_host();
 	}
-
+	
+	if (ret == 0)
+	{
+		logline(LOG_INFO, "Input file check successful. Data seems to be in required format.");		
+	}
+	else
+	{
+		logline(LOG_DEBUG, "There is a problem with the input file format. Aborting.");
+		return -1;
+	}
+	
 	/* Load workitems into linked list */
 	logline(LOG_INFO, "Processing starts now, stay tuned...");
 	logline(LOG_DEBUG, "    Loading workitems...");
@@ -672,8 +675,52 @@ int check_input_file_host(void)
  */
 int check_input_file_ip(void)
 {
+	int error = 0;
+	FILE *f;
+	int ret = 0;
+	regex_t regex_ip;
+	char line[256];
 
+	/* Compile regex pattern */
+	if ((ret = regcomp(&regex_ip, "^[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}$", REG_EXTENDED)) != 0)
+	{
+		return -1;    
+	}
 
+	/* Check if every line in the input file is a valid host */
+	f = fopen(params->inputfile, "r");
+	if (f != NULL)
+	{
+		while ((fgets(line, 255, f) != NULL) && (error == 0))
+		{
+			chomp(line);
+			ret = regexec(&regex_ip, line, 0, NULL, 0);
+			if (ret == 0)
+			{
+				logline(LOG_DEBUG, "    Work item %s is valid", line);
+			}
+			else if (ret == REG_NOMATCH)
+			{
+				logline(LOG_DEBUG, "    Work item %s has an invalid format", line);
+				error = 1;
+			}
+			else
+			{
+				logline(LOG_DEBUG, "    Work item %s has an unknown problem. Return code was: %d", line, ret);
+				error = 1;
+			}	
+		}
+	
+		regfree(&regex_ip);
+		fclose(f);
+		
+		if (error == 1)
+		{
+			return -1;
+		}
+	}
+	
+	return 0;
 }
 
 
@@ -732,7 +779,9 @@ void load_workitems(char *inputfile, workitem **wi_start, int reverse)
 			}
 
 			curr = (workitem *)malloc(sizeof(workitem));  /* free memory! */
-			curr->wi = (char *)malloc(sizeof(host));
+			memset(curr, 0, sizeof(workitem));
+			curr->wi = (char *)malloc(strlen(host) + 1);
+			memset(curr->wi, 0, strlen(host) + 1);
 			strcpy(curr->wi, host);
 
 			curr->next = head;
@@ -789,6 +838,7 @@ void dist_workitems(workitem **wi_list, workitem **wi_t1, workitem **wi_t2,
 					*wi_t1 = *wi_list;
 				}
 				break;
+			
 			case 1:
 				if (t2_first)
 				{
@@ -802,7 +852,7 @@ void dist_workitems(workitem **wi_list, workitem **wi_t1, workitem **wi_t2,
 					*wi_t2 = *wi_list;
 				}
 				break;
-
+			
 			case 2:
 				if (t3_first)
 				{
@@ -852,11 +902,11 @@ void dist_workitems(workitem **wi_list, workitem **wi_t1, workitem **wi_t2,
 	}
 
 	/* Terminate linked lists */
-	(*wi_t1)->next = NULL;
-	(*wi_t2)->next = NULL;
-	(*wi_t3)->next = NULL;
-	(*wi_t4)->next = NULL;
-	(*wi_t5)->next = NULL;
+	if (*wi_t1 != NULL) { (*wi_t1)->next = NULL; }
+	if (*wi_t2 != NULL) { (*wi_t2)->next = NULL; }
+	if (*wi_t3 != NULL) { (*wi_t3)->next = NULL; }
+	if (*wi_t4 != NULL) { (*wi_t4)->next = NULL; }
+	if (*wi_t5 != NULL) { (*wi_t5)->next = NULL; }
 
 	/* Return pointers to start of lists */
 	*wi_t1 = wi_t1_start;
