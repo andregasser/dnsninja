@@ -49,13 +49,12 @@ void change_to_dns_name_format(unsigned char* dns, unsigned char* host)
 	*dns++ = '\0';
 }
 
-//
-// dns_query_a_record
-//
-// Queries a DNS server by sending a host name. Tries to retrieve 
-// one or more ip addresses for the specified host name.
-//
-void dns_query_a_record(char *server, char *host, char *ip_addr[])
+
+/*
+ * Queries a DNS server by sending a host name. Tries to retrieve 
+ * one or more ip addresses for the specified host name.
+ */
+int dns_query_a_record(char *server, char *host, char *ip_addr[])
 {
 	char buffer[65536];
 	int i, j, s, stop;
@@ -64,17 +63,28 @@ void dns_query_a_record(char *server, char *host, char *ip_addr[])
 	struct DNS_HEADER *dns = NULL;
 	struct QUESTION *qinfo = NULL;
 	struct RES_RECORD answers[20];
+    struct timeval timeout;      
 
-	// Initialize buffer
+	/* Initialize buffer */
 	memset(buffer, 0, 65536);
 
-	// Open UDP network socket for DNS packets
+	/* Open UDP network socket for DNS packets */
 	s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);	
+
+	/* Set socket options for receive operations */
+    timeout.tv_sec = 2;
+    timeout.tv_usec = 0;
+    if (setsockopt (s, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0)
+    {
+    	return -3;
+    }
+
+	/* Set target */
 	dest.sin_family = AF_INET;
 	dest.sin_port = htons(53);
 	dest.sin_addr.s_addr = inet_addr(server);
 
-	// Fill the DNS header structure
+	/* Fill the DNS header structure */
 	dns = (struct DNS_HEADER *)&buffer;
 	dns->id = (unsigned short) htons(getpid());
 	dns->qr = 0;              // This is a query
@@ -92,7 +102,7 @@ void dns_query_a_record(char *server, char *host, char *ip_addr[])
 	dns->auth_count = 0;
 	dns->add_count = 0;
 
-	// Point to the query portion
+	/* Point to the query portion */
 	qname = (char *)&buffer[sizeof(struct DNS_HEADER)];
 	change_to_dns_name_format(qname, host);
 	qinfo = (struct QUESTION *)&buffer[sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1)];	
@@ -102,20 +112,20 @@ void dns_query_a_record(char *server, char *host, char *ip_addr[])
 	if (sendto(s, (char *)buffer, sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1) + 
 	sizeof(struct QUESTION), 0, (struct sockaddr *)&dest, sizeof(dest)) < 0)
 	{
-		perror("sendto failed");
+		return -1;  /* sendto failed */
 	}
 	
-	// Receive the answer
+	/* Receive the answer */
 	i = sizeof(dest);
 	if(recvfrom(s, (char *)buffer, 65536, 0, (struct sockaddr *)&dest, (socklen_t *)&i) < 0)
 	{
-		perror("recvfrom failed");
+		return -2;  /* recvfrom failed */
 	}
 
 	reader = &buffer[sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1) + 
 		sizeof(struct QUESTION)];
 
-	// Process answers	
+	/* Process answers */
 	for (i = 0; i < ntohs(dns->ans_count); i++)
 	{
 		answers[i].name = read_name(reader, buffer, &stop);	
@@ -124,7 +134,7 @@ void dns_query_a_record(char *server, char *host, char *ip_addr[])
 		answers[i].resource = (struct R_DATA *)(reader);
 		reader = reader + sizeof(struct R_DATA);
 			
-		// If it is an IPv4 address
+		/* If it is an IPv4 address */
 		if (ntohs(answers[i].resource->type) == 1)
 		{
 			answers[i].rdata = (unsigned char *)malloc(ntohs(answers[i].resource->data_len));
@@ -145,7 +155,7 @@ void dns_query_a_record(char *server, char *host, char *ip_addr[])
 	
 	for (i = 0; i < htons(dns->ans_count); i++)
 	{
-		// Process resource type A (IPv4 address)
+		/* Process resource type A (IPv4 address) */
 		if (ntohs(answers[i].resource->type) == 1) 
 		{
 			long *p;
@@ -155,16 +165,16 @@ void dns_query_a_record(char *server, char *host, char *ip_addr[])
 			strcpy(ip_addr[i], inet_ntoa(a.sin_addr));
 		}
 	}
+	
+	return 0;
 }
 
 
-//
-// dns_query_ptr_record
-//
-// Queries a DNS server by sending an ip address. Tries to retrieve 
-// one or more domain names for the specified ip address.
-//
-void dns_query_ptr_record(char *server, char *ip, char *domains[])
+/*
+ * Queries a DNS server by sending an ip address. Tries to retrieve 
+ * one or more domain names for the specified ip address.
+ */
+int dns_query_ptr_record(char *server, char *ip, char *domains[])
 {
 	char buffer[65536];
 	char ip_inaddr_arpa[256];
@@ -174,18 +184,28 @@ void dns_query_ptr_record(char *server, char *ip, char *domains[])
 	struct DNS_HEADER *dns = NULL;
 	struct QUESTION *qinfo = NULL;
 	struct RES_RECORD answers[20];
+    struct timeval timeout;      
 
-
-	// Initialize buffer
+	/* Initialize buffer */
 	memset(buffer, 0, 65536);
 
-	// Open UDP network socket for DNS packets
+	/* Open UDP network socket for DNS packets */
 	s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);	
+	
+	/* Set socket timeout for receive operations */
+    timeout.tv_sec = 2;
+    timeout.tv_usec = 0;
+    if (setsockopt (s, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0)
+    {
+    	return -3;
+    }
+	
+	/* Set target */
 	dest.sin_family = AF_INET;
 	dest.sin_port = htons(53);
 	dest.sin_addr.s_addr = inet_addr(server);
 
-	// Fill the DNS header structure
+	/* Fill the DNS header structure */
 	dns = (struct DNS_HEADER *)&buffer;
 	dns->id = (unsigned short) htons(getpid());
 	dns->qr = 0;              // This is a query
@@ -203,10 +223,10 @@ void dns_query_ptr_record(char *server, char *ip, char *domains[])
 	dns->auth_count = 0;
 	dns->add_count = 0;
 
-	// Point to the query portion
+	/* Point to the query portion */
 	qname = (char *)&buffer[sizeof(struct DNS_HEADER)];
 	
-	// Prepare ip address in in-addr.arpa format
+	/* Prepare ip address in in-addr.arpa format */
 	prep_inaddr_arpa(ip_inaddr_arpa, ip);
 	
 	change_to_dns_name_format(qname, ip_inaddr_arpa);
@@ -218,20 +238,20 @@ void dns_query_ptr_record(char *server, char *ip, char *domains[])
 	if (sendto(s, (char *)buffer, sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1) + 
 	sizeof(struct QUESTION), 0, (struct sockaddr *)&dest, sizeof(dest)) < 0)
 	{
-		perror("sendto failed");
+		return -1;  /* sendto failed */
 	}
 	
-	// Receive the answer
+	/* Receive the answer */
 	i = sizeof(dest);
 	if(recvfrom(s, (char *)buffer, 65536, 0, (struct sockaddr *)&dest, (socklen_t *)&i) < 0)
 	{
-		perror("recvfrom failed");
+		return -2;  /* recvfrom failed */
 	}
-
+	
 	reader = &buffer[sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1) + 
 		sizeof(struct QUESTION)];
 
-	// Process answers	
+	/* Process answers */
 	for (i = 0; i < ntohs(dns->ans_count); i++)
 	{
 		answers[i].name = read_name(reader, buffer, &stop);	
@@ -240,7 +260,7 @@ void dns_query_ptr_record(char *server, char *ip, char *domains[])
 		answers[i].resource = (struct R_DATA *)(reader);
 		reader = reader + sizeof(struct R_DATA);
 			
-		// If it is an IPv4 address
+		/* If it is an IPv4 address */
 		if (ntohs(answers[i].resource->type) == 1)
 		{
 			answers[i].rdata = (unsigned char *)malloc(ntohs(answers[i].resource->data_len));
@@ -264,15 +284,19 @@ void dns_query_ptr_record(char *server, char *ip, char *domains[])
 		// Process resource type A (IPv4 address)
 		if (ntohs(answers[i].resource->type) == DNS_RES_REC_PTR) 
 		{
-			//long *p;
-			//p = (long *)answers[i].rdata;
-			//a.sin_addr.s_addr = (*p);  // working without ntohl
 			domains[i] = malloc(answers[i].resource->data_len);
 			strcpy(domains[i], answers[i].rdata);
 		}
 	}
+	
+	return 0;
 }
 
+
+/* 
+ * Prepares the IN-ADDR.ARPA address which is required for
+ * doing the reverse DNS lookup.
+ */
 void prep_inaddr_arpa(char *dest, char *src)
 {
 	char *copystr;
@@ -294,16 +318,16 @@ void prep_inaddr_arpa(char *dest, char *src)
 		ptr = strtok(copystr, ".");
 		while (ptr != NULL)
 		{
-			// Save token
+			/* Save token */
 			token[i] = malloc(strlen(ptr));
 			strcpy(token[i], ptr);
 			i++;
 			
-			// Get next token
+			/* Get next token */
 			ptr = strtok(NULL, ".");
 		}
 		
-		// Swap tokens
+		/* Swap tokens */
 		tmp = token[0];
 		token[0] = token[3];
 		token[3] = tmp;
@@ -311,7 +335,7 @@ void prep_inaddr_arpa(char *dest, char *src)
 		token[1] = token[2];
 		token[2] = tmp;
 
-		// Prepare whole "in-addr.arpa" string
+		/* Prepare whole "in-addr.arpa" string */
 		strcat(arpa_addr, token[0]);
 		strcat(arpa_addr, ".");
 		strcat(arpa_addr, token[1]);
@@ -330,6 +354,9 @@ void prep_inaddr_arpa(char *dest, char *src)
 }
 
 
+/* 
+ * Decode the name from response.
+ */
 unsigned char* read_name(unsigned char *reader, unsigned char *buffer, int *count)
 {
 	unsigned char *name;
@@ -341,12 +368,12 @@ unsigned char* read_name(unsigned char *reader, unsigned char *buffer, int *coun
 	
 	name[0] = '\0';
 	
-	// Read the name in 3www6google3com format
+	/* Read the name in 3www6google3com format */
 	while (*reader != 0)
 	{
 		if (*reader >= 192)
 		{
-			// 49152 = 11000000 00000000 ;)
+			/* 49152 = 11000000 00000000 ;) */
 			offset = (*reader) * 256 + *(reader + 1) - 49152;
 			reader = buffer + offset - 1;
 			jumped = 1; // we have jumped to another location, so counting wont' go up!
@@ -371,7 +398,7 @@ unsigned char* read_name(unsigned char *reader, unsigned char *buffer, int *coun
 		*count = *count + 1; // number of steps we actually moved forward in the packet
 	}
 	
-	// Now convert 3www6google3com0 to www.google.com
+	/* Now convert 3www6google3com0 to www.google.com */
 	for (i = 0; i < (int)strlen((const char *)name); i++)
 	{
 		p = name[i];

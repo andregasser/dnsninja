@@ -29,7 +29,7 @@
 
 /* Define some constants */
 #define APP_NAME        "DNSNINJA" /* Name of applicaton */
-#define APP_VERSION     "0.1"    /* Version of application */
+#define APP_VERSION     "0.1.1"    /* Version of application */
 
 /* Used to store command-line args */
 typedef struct 
@@ -75,8 +75,8 @@ int parse_server_cmd_arg(char *optarg, char *servers[]);
 int do_dns_lookups(void);
 int check_input_file_host(void);
 int check_input_file_ip(void);
-void do_forward_dns_lookup(char *server, char *host, result **result_list);
-void do_reverse_dns_lookup(char *server, char *ip, result **result_list);
+int do_forward_dns_lookup(char *server, char *host, result **result_list);
+int do_reverse_dns_lookup(char *server, char *ip, result **result_list);
 void chomp(char *s);
 void display_help_page(void);
 void display_version_info(void);
@@ -335,7 +335,7 @@ int do_dns_lookups(void)
 		default: logline(LOG_INFO, "    Log Level         : Error");
 	}
 
-	/* Check workitems prior to processing */
+	/* Check work items prior to processing */
 	logline(LOG_INFO, "Checking input file...");
 	if (params->reverse)
 	{
@@ -358,21 +358,21 @@ int do_dns_lookups(void)
 		return -1;
 	}
 	
-	/* Load workitems into linked list */
+	/* Load work items into linked list */
 	logline(LOG_INFO, "Processing starts now, stay tuned...");
-	logline(LOG_DEBUG, "    Loading workitems...");
+	logline(LOG_DEBUG, "    Loading work items...");
 	load_workitems(params->inputfile, &wi_start, params->reverse);	
-	logline(LOG_DEBUG, "    %d workitems loaded from file", count_workitems(wi_start));
+	logline(LOG_DEBUG, "    %d work items loaded from file", count_workitems(wi_start));
 
 	/* Distribute workitems among threads */
-	logline(LOG_DEBUG, "    Distributing workitems among threads...");
+	logline(LOG_DEBUG, "    Distributing work items among threads...");
 	dist_workitems(&wi_start, &wi_t1, &wi_t2, &wi_t3, &wi_t4, &wi_t5);
-	logline(LOG_DEBUG, "    Workitems distributed");
-	logline(LOG_DEBUG, "    Thread 1 workitems: %d", count_workitems(wi_t1));
-	logline(LOG_DEBUG, "    Thread 2 workitems: %d", count_workitems(wi_t2));
-	logline(LOG_DEBUG, "    Thread 3 workitems: %d", count_workitems(wi_t3));
-	logline(LOG_DEBUG, "    Thread 4 workitems: %d", count_workitems(wi_t4));
-	logline(LOG_DEBUG, "    Thread 5 workitems: %d", count_workitems(wi_t5));
+	logline(LOG_DEBUG, "    Work items distributed");
+	logline(LOG_DEBUG, "    Thread 1: Work item count = %d", count_workitems(wi_t1));
+	logline(LOG_DEBUG, "    Thread 2: Work item count = %d", count_workitems(wi_t2));
+	logline(LOG_DEBUG, "    Thread 3: Work item count = %d", count_workitems(wi_t3));
+	logline(LOG_DEBUG, "    Thread 4: Work item count = %d", count_workitems(wi_t4));
+	logline(LOG_DEBUG, "    Thread 5: Work item count = %d", count_workitems(wi_t5));
 
 	/* Prepare data structures for threads */
 	t1_params.thread_id = 1;
@@ -407,52 +407,52 @@ int do_dns_lookups(void)
 
 	if (pthread_create(&t1,	NULL, proc_workitems, &t1_params))
 	{
-		logline(LOG_ERROR, "    Could not create thread 1");
+		logline(LOG_ERROR, "    Thread 1: Could not be created");
 		return -1;
 	}
 	else
 	{
-		logline(LOG_DEBUG, "    Thread 1 created");
+		logline(LOG_DEBUG, "    Thread 1: Created");
 	}
 
 	if (pthread_create(&t2,	NULL, proc_workitems, &t2_params))
 	{
-		logline(LOG_ERROR, "    Could not create thread 2");
+		logline(LOG_ERROR, "    Thread 2: Could not be created");
 		return -1;
 	}
 	else
 	{
-		logline(LOG_DEBUG, "    Thread 2 created");
+		logline(LOG_DEBUG, "    Thread 2: Created");
 	}
 
 	if (pthread_create(&t3,	NULL, proc_workitems, &t3_params))
 	{
-		logline(LOG_ERROR, "    Could not create thread 3");
+		logline(LOG_ERROR, "    Thread 3: Could not be created");
 		return -1;
 	}
 	else
 	{
-		logline(LOG_DEBUG, "    Thread 3 created");
+		logline(LOG_DEBUG, "    Thread 3: Created");
 	}
 
 	if (pthread_create(&t4,	NULL, proc_workitems, &t4_params))
 	{
-		logline(LOG_ERROR, "    Could not create thread 4");
+		logline(LOG_ERROR, "    Thread 4: Could not be created");
 		return -1;
 	}
 	else
 	{
-		logline(LOG_DEBUG, "    Thread 4 created");
+		logline(LOG_DEBUG, "    Thread 4: Created");
 	}
 
 	if (pthread_create(&t5,	NULL, proc_workitems, &t5_params))
 	{
-		logline(LOG_ERROR, "    Could not create thread 5");
+		logline(LOG_ERROR, "    Thread 5: Could not be created");
 		return -1;
 	}
 	else
 	{
-		logline(LOG_DEBUG, "    Thread 5 created");
+		logline(LOG_DEBUG, "    Thread 5: Created");
 	}
 
 	/* Wait for threads to finish */
@@ -465,52 +465,52 @@ int do_dns_lookups(void)
 	/* Extract results out of threads */
 	if ((int *)t1_status < 0)
 	{
-		logline(LOG_ERROR, "    Thread 1 had an error condition");
+		logline(LOG_ERROR, "    Thread 1: An error occurred");
 	}
 	else
 	{
 		/* Extract results from thread 1 */
-		logline(LOG_DEBUG, "    Thread 1 finished successfully");
+		logline(LOG_DEBUG, "    Thread 1: Finished successfully");
 	}
 
 	if ((int *)t2_status < 0)
 	{
-		logline(LOG_ERROR, "    Thread 2 had an error condition");
+		logline(LOG_ERROR, "    Thread 2: An error occurred");
 	}
 	else
 	{
 		/* Extract results from thread 2 */
-		logline(LOG_DEBUG, "    Thread 2 finished successfully");
+		logline(LOG_DEBUG, "    Thread 2: Finished successfully");
 	}
 
 	if ((int *)t3_status < 0)
 	{
-		logline(LOG_ERROR, "    Thread 3 had an error condition");
+		logline(LOG_ERROR, "    Thread 3: An error occurred");
 	}
 	else
 	{
 		/* Extract results from thread 3 */
-		logline(LOG_DEBUG, "    Thread 3 finished successfully");
+		logline(LOG_DEBUG, "    Thread 3: Finished successfully");
 	}
 
 	if ((int *)t4_status < 0)
 	{
-		logline(LOG_ERROR, "    Thread 4 had an error condition");
+		logline(LOG_ERROR, "    Thread 4: An error occurred");
 	}
 	else
 	{
 		/* Extract results from thread 4 */
-		logline(LOG_DEBUG, "    Thread 4 finished successfully");
+		logline(LOG_DEBUG, "    Thread 4: Finished successfully");
 	}
 
 	if ((int *)t5_status < 0)
 	{
-		logline(LOG_ERROR, "    Thread 5 had an error condition");
+		logline(LOG_ERROR, "    Thread 5: An error occurred");
 	}
 	else
 	{
 		/* Extract results from thread 5 */
-		logline(LOG_DEBUG, "    Thread 5 finished successfully");
+		logline(LOG_DEBUG, "    Thread 5: Finished successfully");
 	}
 
 	/* Consolidate results */
@@ -800,7 +800,7 @@ void load_workitems(char *inputfile, workitem **wi_start, int reverse)
 
 
 /*
- * Distribute workitems among threads.
+ * Distribute work items among threads.
  */
 void dist_workitems(workitem **wi_list, workitem **wi_t1, workitem **wi_t2,
 		workitem **wi_t3, workitem **wi_t4, workitem **wi_t5)
@@ -918,7 +918,7 @@ void dist_workitems(workitem **wi_list, workitem **wi_t1, workitem **wi_t2,
 
 
 /*
- * Counts workitems in list.
+ * Counts work items in list.
  */
 int count_workitems(workitem *wi_list)
 {
@@ -935,10 +935,11 @@ int count_workitems(workitem *wi_list)
 
 
 /*
- * Process a list of workitems.
+ * Process a list of work items.
  */
 void *proc_workitems(void *arg)
 {
+	int ret = 0;
 	workitem *wi_list;
 
 	/* Cast input param to thread_params struct */
@@ -953,11 +954,17 @@ void *proc_workitems(void *arg)
 		logline(LOG_DEBUG, "    Thread %d: Processing workitem %s", t_params->thread_id, wi_list->wi);
 		if (t_params->reverse)
 		{
-			do_reverse_dns_lookup(t_params->server, wi_list->wi, &(t_params->result_list));
+			ret = do_reverse_dns_lookup(t_params->server, wi_list->wi, &(t_params->result_list));
 		}
 		else
 		{
-			do_forward_dns_lookup(t_params->server, wi_list->wi, &(t_params->result_list));
+			ret = do_forward_dns_lookup(t_params->server, wi_list->wi, &(t_params->result_list));
+		}
+		
+		if (ret < 0)
+		{
+			logline(LOG_ERROR, "    Thread %d: Error querying DNS server", t_params->thread_id);
+			pthread_exit(&ret);
 		}
 
 		wi_list = wi_list->next;
@@ -968,19 +975,24 @@ void *proc_workitems(void *arg)
 /*
  * Perform a forward DNS lookup
  */
-void do_forward_dns_lookup(char *server, char *host, result **result_list)
+int do_forward_dns_lookup(char *server, char *host, result **result_list)
 {
 	result *list_orig_startaddr = *result_list;
 	result *list_head = NULL;
 	result *list_entry = NULL;
 	result *list_start = NULL;
+	int ret = 0;
 	int i;
 	char *ip_addr[20];
 
 	/* Initialize array of ip adresses */
 	for (i = 0; i < 20; i++) { ip_addr[i] = NULL; }
 
-	dns_query_a_record(server, host, ip_addr);
+	ret = dns_query_a_record(server, host, ip_addr);
+	if (ret != 0)
+	{
+		return -1;
+	}
 
 	/* Add found ips to a local linked list */
 	for (i = 0; i < 20; i++)
@@ -1031,25 +1043,32 @@ void do_forward_dns_lookup(char *server, char *host, result **result_list)
 			*result_list = list_orig_startaddr;
 		}
 	}
+	
+	return 0;
 }
 
 
 /*
  * Perform a reverse dns lookup
  */
-void do_reverse_dns_lookup(char *server, char *ip, result **result_list)
+int do_reverse_dns_lookup(char *server, char *ip, result **result_list)
 {
 	result *list_orig_startaddr = *result_list;
 	result *list_head = NULL;
 	result *list_entry = NULL;
 	result *list_start = NULL;
 	int i = 0;
+	int ret = 0;
 	char *domains[20];
 
 	/* Initialize array of domains */
 	for (i = 0; i < 20; i++) { domains[i] = NULL; }
 
-	dns_query_ptr_record(server, ip, domains);
+	ret = dns_query_ptr_record(server, ip, domains);
+	if (ret != 0)
+	{
+		return -1;
+	}
 
 	/* Add found domains to a local linked list */
 	for (i = 0; i < 20; i++)
@@ -1100,6 +1119,8 @@ void do_reverse_dns_lookup(char *server, char *ip, result **result_list)
 		/* Restore beginning of list pointer */
 		*result_list = list_orig_startaddr;
 	}
+	
+	return 0;
 }
 
 
@@ -1132,6 +1153,16 @@ char *get_random_server(void)
 	rnd = rand() % get_servers_count();
 
 	return params->servers[rnd];
+}
+
+
+/* 
+ * Checks if the server responds on port 53.
+ */
+int check_server(char *server_ip)
+{
+
+
 }
 
 

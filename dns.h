@@ -86,8 +86,8 @@ typedef struct
 } QUERY;
 
 void change_to_dns_name_format(unsigned char* dns, unsigned char* host);
-void dns_query_a_record(char *server, char *host, char *ip_addr[]);
-void dns_query_ptr_record(char *server, char *ip, char *domains[]);
+int dns_query_a_record(char *server, char *host, char *ip_addr[]);
+int dns_query_ptr_record(char *server, char *ip, char *domains[]);
 void prep_inaddr_arpa(char *dest, char *src);
 unsigned char* read_name(unsigned char *reader, unsigned char *buffer, int *count);
 
