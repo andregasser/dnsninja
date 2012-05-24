@@ -629,7 +629,7 @@ int check_input_file_host(void)
 	char line[256];
 
 	/* Compile regex pattern */
-	if ((ret = regcomp(&regex_host, "^[0-9a-z]{3,100}$", REG_EXTENDED)) != 0)
+	if ((ret = regcomp(&regex_host, "^[0-9a-zA-Z-]{3,100}$", REG_EXTENDED)) != 0)
 	{
 		return -1;    
 	}
@@ -1153,16 +1153,6 @@ char *get_random_server(void)
 	rnd = rand() % get_servers_count();
 
 	return params->servers[rnd];
-}
-
-
-/* 
- * Checks if the server responds on port 53.
- */
-int check_server(char *server_ip)
-{
-
-
 }
 
 
