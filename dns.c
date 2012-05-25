@@ -22,6 +22,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <errno.h>
 #include "dns.h"
 
 
@@ -58,6 +59,7 @@ int dns_query_a_record(char *server, char *host, char *ip_addr[])
 {
 	char buffer[65536];
 	int i, j, s, stop;
+	int ret = 0;
 	char *qname, *reader;
 	struct sockaddr_in a, dest;
 	struct DNS_HEADER *dns = NULL;
@@ -72,9 +74,10 @@ int dns_query_a_record(char *server, char *host, char *ip_addr[])
 	s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);	
 
 	/* Set socket options for receive operations */
-    timeout.tv_sec = 2;
+    timeout.tv_sec = 5;
     timeout.tv_usec = 0;
-    if (setsockopt (s, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0)
+    ret = setsockopt (s, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout));
+    if (ret < 0)
     {
     	return -3;
     }
@@ -109,17 +112,29 @@ int dns_query_a_record(char *server, char *host, char *ip_addr[])
 	qinfo->qtype = htons(DNS_RES_REC_A);  // qtype = A
 	qinfo->qclass = htons(1); // qclass = IN
 
-	if (sendto(s, (char *)buffer, sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1) + 
-	sizeof(struct QUESTION), 0, (struct sockaddr *)&dest, sizeof(dest)) < 0)
+	ret = sendto(s, (char *)buffer, sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1) + 
+		sizeof(struct QUESTION), 0, (struct sockaddr *)&dest, sizeof(dest));
+	if (ret < 0)
 	{
 		return -1;  /* sendto failed */
 	}
 	
 	/* Receive the answer */
 	i = sizeof(dest);
-	if(recvfrom(s, (char *)buffer, 65536, 0, (struct sockaddr *)&dest, (socklen_t *)&i) < 0)
+	ret = recvfrom(s, (char *)buffer, 65536, 0, (struct sockaddr *)&dest, (socklen_t *)&i);
+	if (ret < 0)
 	{
-		return -2;  /* recvfrom failed */
+		/* Implement special handling if resource is temporarily unavailable
+		 * errorcode = 11
+		 */
+		if (errno == 11)
+		{
+			return -4;
+		}
+		else
+		{
+			return -2;
+		}		
 	}
 
 	reader = &buffer[sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1) + 
@@ -179,6 +194,7 @@ int dns_query_ptr_record(char *server, char *ip, char *domains[])
 	char buffer[65536];
 	char ip_inaddr_arpa[256];
 	int i, j, s, stop;
+	int ret = 0;
 	char *qname, *reader;
 	struct sockaddr_in a, dest;
 	struct DNS_HEADER *dns = NULL;
@@ -193,9 +209,10 @@ int dns_query_ptr_record(char *server, char *ip, char *domains[])
 	s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);	
 	
 	/* Set socket timeout for receive operations */
-    timeout.tv_sec = 2;
+    timeout.tv_sec = 5;
     timeout.tv_usec = 0;
-    if (setsockopt (s, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout)) < 0)
+    ret = setsockopt (s, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout));
+    if (ret < 0)
     {
     	return -3;
     }
@@ -235,17 +252,30 @@ int dns_query_ptr_record(char *server, char *ip, char *domains[])
 	qinfo->qtype = htons(DNS_RES_REC_PTR);  // qtype = PTR
 	qinfo->qclass = htons(1); // qclass = IN
 
-	if (sendto(s, (char *)buffer, sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1) + 
-	sizeof(struct QUESTION), 0, (struct sockaddr *)&dest, sizeof(dest)) < 0)
+	
+	ret = sendto(s, (char *)buffer, sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1) + 
+		sizeof(struct QUESTION), 0, (struct sockaddr *)&dest, sizeof(dest));
+	if (ret < 0)
 	{
 		return -1;  /* sendto failed */
 	}
 	
 	/* Receive the answer */
 	i = sizeof(dest);
-	if(recvfrom(s, (char *)buffer, 65536, 0, (struct sockaddr *)&dest, (socklen_t *)&i) < 0)
+	ret = recvfrom(s, (char *)buffer, 65536, 0, (struct sockaddr *)&dest, (socklen_t *)&i);
+	if (ret < 0)
 	{
-		return -2;  /* recvfrom failed */
+		/* Implement special handling if resource is temporarily unavailable
+		 * errorcode = 11
+		 */
+		if (errno == 11)
+		{
+			return -4;
+		}
+		else
+		{
+			return -2;
+		}
 	}
 	
 	reader = &buffer[sizeof(struct DNS_HEADER) + (strlen((const char *)qname) + 1) + 

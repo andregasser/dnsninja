@@ -122,18 +122,30 @@ int main(int argc, char *argv[])
 	}
 	if (ret < 0)
 	{
-		if ((ret == -1) || (ret == -4)) 
-			logline(LOG_ERROR, "Error: Server must be specified (use option -s)"); 
-		if (ret == -2)
-			logline(LOG_ERROR, "Error: Domain must be specified (use option -d)");
-		if ((ret == -3) || (ret == -5))
-			logline(LOG_ERROR, "Error: Input file must be specified (use option -i)");
-		if (ret == -6)
-			logline(LOG_ERROR, "Error: Invalid log level option specified (-l).");
+		switch (ret)
+		{
+			case -1:
+				logline(LOG_ERROR, "Error: No server specified (use option -s)"); 	
+				break;
+			case -2:
+				logline(LOG_ERROR, "Error: Input file must be specified (use option -i)");
+				break;
+			case -3:
+				logline(LOG_ERROR, "Error: Servers could not be interpreted (use option -s)"); 	
+				break;
+			case -4:
+				logline(LOG_ERROR, "Error: Invalid log level option specified (use option -l).");
+				break;
+			case -5:
+				logline(LOG_ERROR, "Error: No domain specified (use -d option).");
+				break;
+			default:
+				logline(LOG_ERROR, "Error: An unknown error occurred during parsing of command line args.");
+		}
+					
 		logline(LOG_ERROR, "Use the -h option if you need help.");
 		return ret;
 	}
-	
 
 	/* Set log level */
 	switch (params->loglevel)
@@ -169,6 +181,8 @@ int parse_cmd_args(int *argc, char *argv[])
 {
 	int i;
 	int ret = 0;
+	int param_server_err = 0;
+	int param_loglevel_err = 0;
 
 	/* Init struct */
 	params->reverse = 0;
@@ -216,7 +230,7 @@ int parse_cmd_args(int *argc, char *argv[])
 			case 's':
 				/* Process server parameters */
 				ret = parse_server_cmd_arg(optarg, params->servers);
-				if (ret != 0) { return ret; }
+				if (ret != 0) { param_server_err = 1; }
 				break;
 			case 'd':
 				params->domain = optarg;
@@ -236,26 +250,22 @@ int parse_cmd_args(int *argc, char *argv[])
 			case 'l':
 				params->loglevel = atoi(optarg);
 	            if ((params->loglevel < 1) || (params->loglevel > 3))
-	            	return -6;
+	            	param_loglevel_err = 1;
 				break;
 		}
 	}
 
 	/* Check param dependencies */
+	if (get_servers_count() == 0) { return -1; }
+	if (params->inputfile == NULL) { return -2; }
+	if (param_server_err == 1) { return -3; }
+	if (param_loglevel_err == 1) { return -4; }
 	if (params->reverse == 0)
 	{
-		/* Forward lookups require domain, server and inputfile params */
-		if (get_servers_count() == 0) { return -1; }
-		if (params->domain == NULL) { return -2; }
-		if (params->inputfile == NULL) { return -3; }
-	}
-	else
-	{
-		/* Reverse lookups require server and inputfile params */
-		if (get_servers_count() == 0) { return -4; }
-		if (params->inputfile == NULL) { return -5; }
-	}
-
+		/* Additional parameter checks when doing forward lookup requests */
+		if (params->domain == NULL) { return -5; }
+	}	
+	
 	return 0;
 }
 
@@ -281,6 +291,12 @@ int parse_server_cmd_arg(char *optarg, char *servers[])
 			/* Get next token */
 			ptr = strtok(NULL, ",");
 		}
+	
+		return 0;
+	}
+	else
+	{
+		return -1;
 	}
 }
 
@@ -348,15 +364,24 @@ int do_dns_lookups(void)
 		ret = check_input_file_host();
 	}
 	
-	if (ret == 0)
+	switch (ret)
 	{
-		logline(LOG_INFO, "Input file check successful. Data seems to be in required format.");		
+		case 0:
+			logline(LOG_INFO, "Input file check successful. Data seems to be in required format.");		
+			break;
+		case -1:
+		case -2:
+			logline(LOG_INFO, "There is a problem with the input file format. Aborting.");		
+			break;
+		case -3:
+			logline(LOG_INFO, "The input file could not be opened. Are you sure the file exists?");		
+			break;
+		default:
+			logline(LOG_INFO, "An unhandled error related to the input file occured.");		
 	}
-	else
-	{
-		logline(LOG_DEBUG, "There is a problem with the input file format. Aborting.");
+	
+	if (ret < 0)
 		return -1;
-	}
 	
 	/* Load work items into linked list */
 	logline(LOG_INFO, "Processing starts now, stay tuned...");
@@ -663,8 +688,13 @@ int check_input_file_host(void)
 		
 		if (error == 1)
 		{
-			return -1;
+			return -2;
 		}
+	}
+	else
+	{	
+		/* File could not be opened */
+		return -3;
 	}
 	
 	return 0;
@@ -716,8 +746,13 @@ int check_input_file_ip(void)
 		
 		if (error == 1)
 		{
-			return -1;
+			return -2;
 		}
+	}
+	else
+	{ 
+		/* File could not be opened */
+		return -3;
 	}
 	
 	return 0;
@@ -963,8 +998,15 @@ void *proc_workitems(void *arg)
 		
 		if (ret < 0)
 		{
-			logline(LOG_ERROR, "    Thread %d: Error querying DNS server", t_params->thread_id);
-			pthread_exit(&ret);
+			if (ret == -2)
+			{
+				logline(LOG_ERROR, "    Thread %d: DNS server temporarily not available. Skipping %s", t_params->thread_id, wi_list->wi);
+			}
+			else
+			{
+				logline(LOG_ERROR, "    Thread %d: Error querying DNS server. Error code: %d", t_params->thread_id, ret);
+				pthread_exit(&ret);
+			}
 		}
 
 		wi_list = wi_list->next;
@@ -991,8 +1033,20 @@ int do_forward_dns_lookup(char *server, char *host, result **result_list)
 	ret = dns_query_a_record(server, host, ip_addr);
 	if (ret != 0)
 	{
-		return -1;
-	}
+		if (ret == -4)
+		{
+			return -2;
+		}
+		else
+		{
+			//logline(LOG_INFO, "ERRORCODE dns_query_ptr_record was: %d", ret);
+			return -1;
+		}
+	}	
+	//if (ret != 0)
+	//{
+	//	return -1;
+	//}
 
 	/* Add found ips to a local linked list */
 	for (i = 0; i < 20; i++)
@@ -1067,7 +1121,15 @@ int do_reverse_dns_lookup(char *server, char *ip, result **result_list)
 	ret = dns_query_ptr_record(server, ip, domains);
 	if (ret != 0)
 	{
-		return -1;
+		if (ret == -4)
+		{
+			return -2;
+		}
+		else
+		{
+			//logline(LOG_INFO, "ERRORCODE dns_query_ptr_record was: %d", ret);
+			return -1;
+		}
 	}
 
 	/* Add found domains to a local linked list */

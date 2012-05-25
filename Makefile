@@ -12,7 +12,7 @@ else
 endif
 
 dnsninja : log.o dns.o dnsninja.o
-	$(CC) $(CFLAGS) -o dnsninja log.o dns.o dnsninja.o -lpthread
+	$(CC) $(CFLAGS) -o dnsninja log.o dns.o dnsninja.o -lpthread -lgcc_s
 
 dnsninja.o : log.o
 	$(CC) $(CFLAGS) -c dnsninja.c -o dnsninja.o
